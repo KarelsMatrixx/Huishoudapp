@@ -2,5 +2,5 @@
 export const CONFIG = {
   supabaseUrl: "https://pprrkmbvzklxhydejrby.supabase.co",
   supabaseAnonKey: "sb_publishable_zKQkhohU2f3VC8pv3r4Azw_rUD2mnJp",
-  vapidPublicKey: "BCg4AnWJ1hr4zxSg-6LYaKSwwpGzNm3in1yAJ1fRr7AIpUXbp5n5T0G0DU2bB7mSGH3ZXu1BFnvRknZM4nKSCEk",
+  vapidPublicKey: "BBpy8wIpgvM0kX4Nn9KFsRd1qlv4JAtQ1VAR3ckFORWyqHT4ZDQES_iJ0bUaWcMS1Gd4KuUoy9L_NqlwrKwdchY",
 };
