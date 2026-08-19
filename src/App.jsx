@@ -162,7 +162,7 @@ function Chat({ chat, zetChat, ik, personen, meld, sluit }) {
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col" style={{ background: PAPIER }}>
-      <header className="flex items-center gap-3 px-5 py-4" style={{ background: KAART, borderBottom: `1px solid ${LIJN}` }}>
+      <header className="flex items-center gap-3 px-5 pb-4" style={{ background: KAART, borderBottom: `1px solid ${LIJN}`, paddingTop: "calc(16px + env(safe-area-inset-top))" }}>
         <button onClick={sluit} style={{ color: ZACHT }}><ChevronLeft size={22} /></button>
         <Avatar persoon={ander} kleur={KLEUREN[personen.findIndex((p) => p.pid === ander?.pid)] || ZACHT} maat={32} rand={LIJN} />
         <p className="text-lg" style={{ fontFamily: DISPLAY, fontWeight: 700, color: INK }}>{ander ? ander.naam : "Chat"}</p>
@@ -187,7 +187,7 @@ function Chat({ chat, zetChat, ik, personen, meld, sluit }) {
         <div ref={onder} />
       </div>
 
-      <div className="flex gap-2 px-4 py-3" style={{ background: KAART, borderTop: `1px solid ${LIJN}` }}>
+      <div className="flex gap-2 px-4 pt-3" style={{ background: KAART, borderTop: `1px solid ${LIJN}`, paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
         <Invoer waarde={tekst} zet={zetTekst} plaats="Bericht" opEnter={versturen} />
         <button onClick={versturen} className="shrink-0 rounded-xl px-4" style={{ background: INK, color: "#fff" }}>
           <Send size={18} />
@@ -1298,10 +1298,10 @@ export default function Huishoudapp({ gebruiker }) {
   ];
 
   return (
-    <div className="relative flex h-screen flex-col" style={{ background: PAPIER, fontFamily: BODY, color: INK }}>
+    <div className="relative flex flex-col" style={{ height: "100dvh", background: PAPIER, fontFamily: BODY, color: INK }}>
       <style>{stijl}</style>
 
-      <header className="flex items-end justify-between px-5 pt-6 pb-4">
+      <header className="flex items-end justify-between px-5 pb-4" style={{ paddingTop: "calc(24px + env(safe-area-inset-top))" }}>
         <div className="flex items-end gap-3">
           <FotoKnop opFoto={bewaarFoto} style={{ borderRadius: "50%" }}>
             <Avatar persoon={ik} kleur={KLEUREN[personen.findIndex((p) => p.pid === ikId)] || INK} maat={40} rand={LIJN} />
@@ -1345,7 +1345,7 @@ export default function Huishoudapp({ gebruiker }) {
       {!chatOpen && (
         <button onClick={() => zetChatOpen(true)}
           className="absolute right-5 flex h-14 w-14 items-center justify-center rounded-full"
-          style={{ bottom: 88, background: INK, color: "#fff", boxShadow: "0 6px 20px rgba(22,36,31,.25)" }}
+          style={{ bottom: "calc(88px + env(safe-area-inset-bottom))", background: INK, color: "#fff", boxShadow: "0 6px 20px rgba(22,36,31,.25)" }}
           aria-label="Chat openen">
           <MessageCircle size={22} />
         </button>
@@ -1355,7 +1355,8 @@ export default function Huishoudapp({ gebruiker }) {
         <Chat chat={chat} zetChat={zetChat} ik={ik} personen={personen} meld={meld} sluit={() => zetChatOpen(false)} />
       )}
 
-      <nav className="flex justify-around px-2 pt-2 pb-3" style={{ background: KAART, borderTop: `1px solid ${LIJN}` }}>
+      <nav className="flex shrink-0 justify-around px-2 pt-2"
+        style={{ background: KAART, borderTop: `1px solid ${LIJN}`, paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
         {tabs.map(({ k, l, I }) => (
           <button key={k} onClick={() => zetTab(k)} className="flex flex-col items-center gap-1 px-3 py-1"
             style={{ color: tab === k ? INK : ZACHT }}>
