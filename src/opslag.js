@@ -77,29 +77,61 @@ function naarBytes(base64) {
 }
 
 export async function meldingenAanzetten(persoonId) {
-  if (typeof Notification === "undefined" || !("serviceWorker" in navigator)) {
-    alert("Meldingen werken alleen als je deze app op je beginscherm zet.");
-    return "kan niet";
-  }
-  const toestemming = await Notification.requestPermission();
-  if (toestemming !== "granted") return "uit";
+  try {
+    if (typeof Notification === "undefined" || !("serviceWorker" in navigator)) {
+      alert("Deze browser kan geen meldingen tonen. Zet de app op je beginscherm en open hem via dat icoon.");
+      return "kan niet";
+    }
+    if (!window.isSecureContext) {
+      alert("Meldingen werken alleen op een beveiligde verbinding.");
+      return "kan niet";
+    }
 
-  const sw = await navigator.serviceWorker.ready;
-  let abo = await sw.pushManager.getSubscription();
-  if (!abo) {
-    abo = await sw.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: naarBytes(CONFIG.vapidPublicKey),
-    });
-  }
-  const j = abo.toJSON();
-  await db.from("abonnementen").upsert({
-    endpoint: j.endpoint,
-    p256dh: j.keys.p256dh,
-    auth: j.keys.auth,
-    persoon: persoonId,
-    gebruiker: await gebruikerId(),
-  }, { onConflict: "endpoint" });
+    const toestemming = await Notification.requestPermission();
+    if (toestemming !== "granted") {
+      alert("Je hebt meldingen geweigerd. Zet ze aan via Instellingen, Ons huis, Berichtgeving.");
+      return "uit";
+    }
 
-  return "aan";
+    const sw = await navigator.serviceWorker.ready;
+
+    let abo = await sw.pushManager.getSubscription();
+    if (!abo) {
+      try {
+        abo = await sw.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: naarBytes(CONFIG.vapidPublicKey),
+        });
+      } catch (e) {
+        alert("Aanmelden bij de meldingsdienst mislukte: " + e.message);
+        return "uit";
+      }
+    }
+
+    const { data: sessie } = await db.auth.getUser();
+    if (!sessie?.user) {
+      alert("Je bent niet ingelogd. Meld je opnieuw aan.");
+      return "uit";
+    }
+
+    const j = abo.toJSON();
+    const { error } = await db.from("abonnementen").upsert({
+      endpoint: j.endpoint,
+      p256dh: j.keys.p256dh,
+      auth: j.keys.auth,
+      persoon: persoonId,
+      gebruiker: sessie.user.id,
+    }, { onConflict: "endpoint" });
+
+    if (error) {
+      alert("Opslaan van je toestel mislukte: " + error.message + " (code " + (error.code || "onbekend") + ")");
+      return "uit";
+    }
+
+    alert("Gelukt. Dit toestel ontvangt vanaf nu meldingen.");
+    return "aan";
+  } catch (e) {
+    alert("Er ging iets mis: " + (e?.message || e));
+    return "uit";
+  }
 }
