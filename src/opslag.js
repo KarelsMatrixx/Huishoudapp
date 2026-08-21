@@ -30,14 +30,14 @@ async function gebruikerId() {
 export async function laad(sleutel, gedeeld) {
   if (gedeeld) {
     const { data, error } = await db.from("huis_data").select("waarde").eq("sleutel", sleutel).maybeSingle();
-    if (error) { console.warn("Laden mislukt:", error.message); return null; }
+    if (error) throw new Error("Laden van " + sleutel + " mislukte: " + error.message);
     return data ? data.waarde : null;
   }
   const uid = await gebruikerId();
   if (!uid) return null;
   const { data, error } = await db.from("prive_data")
     .select("waarde").eq("gebruiker", uid).eq("sleutel", sleutel).maybeSingle();
-  if (error) { console.warn("Laden mislukt:", error.message); return null; }
+  if (error) throw new Error("Laden van " + sleutel + " mislukte: " + error.message);
   return data ? data.waarde : null;
 }
 
