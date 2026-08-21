@@ -1153,11 +1153,14 @@ export default function Huishoudapp({ gebruiker }) {
   const [foto, zetFoto] = useState(null);
   const [tab, zetTab] = useState("vandaag");
   const [laden, zetLaden] = useState(true);
+  const [geladen, zetGeladen] = useState(false);
+  const [laadFout, zetLaadFout] = useState(null);
   const [meldingen, zetMeldingen] = useState(meldingStand());
   const [naam, zetNaam] = useState("");
   const laatsteSync = useRef(0);
 
   const haalOp = useCallback(async () => {
+    try {
     const [hg, bo, kl, me, we, pr, ro, ui, ch] = await Promise.all([
       laad("huisgenoten", true), laad("boodschappen", true),
       laad("klussen", true), laad("weekmenu", true), laad("wensen", true), laad("prive", false),
@@ -1173,7 +1176,12 @@ export default function Huishoudapp({ gebruiker }) {
     zetMenuS(me || {});
     zetWensenS(we || []);
     zetPriveS(pr || []);
-    laatsteSync.current = Date.now();
+      laatsteSync.current = Date.now();
+      zetGeladen(true);
+      zetLaadFout(null);
+    } catch (e) {
+      zetLaadFout(e?.message || String(e));
+    }
     zetLaden(false);
   }, [gebruiker.id]);
 
@@ -1185,7 +1193,11 @@ export default function Huishoudapp({ gebruiker }) {
     return () => document.removeEventListener("visibilitychange", bij);
   }, [haalOp]);
 
-  const maak = (sleutel, zetter, gedeeld) => (waarde) => { zetter(waarde); bewaar(sleutel, waarde, gedeeld); };
+  const maak = (sleutel, zetter, gedeeld) => (waarde) => {
+    if (!geladen) return; // voorkomt dat lege lijsten over bestaande gegevens gaan
+    zetter(waarde);
+    bewaar(sleutel, waarde, gedeeld);
+  };
   const zetBoodschappen = maak("boodschappen", zetBoodschappenS, true);
   const zetKlussen = maak("klussen", zetKlussenS, true);
   const zetMenu = maak("weekmenu", zetMenuS, true);
@@ -1216,20 +1228,41 @@ export default function Huishoudapp({ gebruiker }) {
     }));
   };
 
+  // Leest de actuele lijst, past hem aan en schrijft hem terug. Zo raakt niemand kwijt.
+  const wijzigHuisgenoten = async (wijzig) => {
+    const actueel = (await laad("huisgenoten", true)) || [];
+    const nieuw = wijzig(actueel);
+    if (!nieuw) return null;
+    zetPersonen(nieuw);
+    await bewaar("huisgenoten", nieuw, true);
+    return nieuw;
+  };
+
   const kies = async (pid) => {
-    const bijgewerkt = personen.map((p) => p.pid === pid ? { ...p, gebruiker: gebruiker.id } : p);
-    zetPersonen(bijgewerkt);
+    await wijzigHuisgenoten((lijst) => lijst.map((p) => p.pid === pid ? { ...p, gebruiker: gebruiker.id } : p));
     zetIkId(pid);
-    await bewaar("huisgenoten", bijgewerkt, true);
     zetPriveS((await laad("prive", false)) || []);
   };
   const maakPersoon = async () => {
-    if (!naam.trim() || personen.length >= 2) return;
-    const nieuw = [...personen, { pid: id(), naam: naam.trim(), foto, gebruiker: gebruiker.id }];
-    zetPersonen(nieuw);
-    await bewaar("huisgenoten", nieuw, true);
-    zetIkId(nieuw[nieuw.length - 1].pid);
-    zetNaam("");
+    if (!naam.trim()) return;
+    let mijnPid = null;
+    const uitkomst = await wijzigHuisgenoten((lijst) => {
+      // Bestaat er al iemand met deze naam? Dan claim je dat profiel, met alle punten erin.
+      const bestaand = lijst.find((p) => p.naam.trim().toLowerCase() === naam.trim().toLowerCase());
+      if (bestaand) {
+        mijnPid = bestaand.pid;
+        return lijst.map((p) => p.pid === bestaand.pid
+          ? { ...p, gebruiker: gebruiker.id, foto: foto || p.foto } : p);
+      }
+      if (lijst.length >= 2) {
+        alert("Dit huishouden heeft al twee bewoners. Kies hierboven wie jij bent.");
+        return null;
+      }
+      const verse = { pid: id(), naam: naam.trim(), foto, gebruiker: gebruiker.id };
+      mijnPid = verse.pid;
+      return [...lijst, verse];
+    });
+    if (uitkomst && mijnPid) { zetIkId(mijnPid); zetNaam(""); }
   };
 
   const stijl = `
@@ -1242,6 +1275,22 @@ export default function Huishoudapp({ gebruiker }) {
 
   if (laden) {
     return <div className="flex h-screen items-center justify-center" style={{ background: PAPIER, color: ZACHT, fontFamily: BODY }}>Even laden…</div>;
+  }
+
+  if (laadFout) {
+    return (
+      <div className="flex min-h-screen flex-col justify-center p-6" style={{ background: PAPIER, fontFamily: BODY }}>
+        <h1 className="text-3xl" style={{ fontFamily: DISPLAY, fontWeight: 800, color: INK }}>Even niet gelukt</h1>
+        <p className="mt-2 text-sm" style={{ color: ZACHT }}>
+          De gegevens konden niet worden opgehaald, dus toont de app niets. Er is niets kwijt.
+        </p>
+        <p className="mt-2 text-xs" style={{ color: ZACHT, fontFamily: MONO }}>{laadFout}</p>
+        <div className="mt-4 flex gap-2">
+          <Knop onClick={() => { zetLaden(true); haalOp(); }}>Opnieuw proberen</Knop>
+          <Knop onClick={afmelden} vol={false} kleur={ZACHT}>Afmelden</Knop>
+        </div>
+      </div>
+    );
   }
 
   /* onboarding */
