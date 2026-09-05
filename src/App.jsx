@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Home, ShoppingBasket, Sparkles, UtensilsCrossed, Heart,
-  Plus, Check, X, RefreshCw, Trash2, ArrowLeftRight, ChevronLeft, ChevronRight, Bell, BellOff, MessageCircle, Send, Camera, ChevronDown, LogOut, Repeat
+  Home, ShoppingBasket, Sparkles, Heart,
+  Plus, Check, X, RefreshCw, Trash2, ArrowLeftRight, ChevronLeft, ChevronRight, Bell, BellOff, MessageCircle, Send, Camera, ChevronDown, LogOut, Repeat, RotateCcw
 } from "lucide-react";
 import { laad, bewaar, luister, meldingenAanzetten, meldingStand, afmelden } from "./opslag";
 
@@ -332,27 +332,66 @@ function MijnTaken({ ik, klussen, vinkAf, kleur }) {
   );
 }
 
-/* Wat er vandaag is afgerond, door jullie allebei. */
-function VandaagAfgerond({ klussen, personen }) {
-  const vandaag = sleutelVan(new Date());
+/* Wat er is afgerond, met de mogelijkheid een vergissing terug te draaien. */
+function Afgerond({ klussen, personen, vinkAf }) {
+  const [bereik, zetBereik] = useState("vandaag");
+  const nu = new Date();
+  const vandaag = sleutelVan(nu);
+  const weekStart = sleutelVan(maandagVan(nu));
+
   const gedaan = [];
-  klussen.forEach((k) => (k.geschiedenis || []).forEach((g) => {
-    if (g.datum === vandaag) gedaan.push({ titel: k.titel, door: g.door, punten: g.punten ?? 1, id: k.id + g.door });
+  klussen.forEach((k) => (k.geschiedenis || []).forEach((g, n) => {
+    const past = bereik === "vandaag" ? g.datum === vandaag : g.datum >= weekStart && g.datum <= vandaag;
+    if (past) gedaan.push({ sleutel: k.id + "-" + n, klus: k, door: g.door, datum: g.datum, punten: g.punten ?? 1 });
   }));
+  gedaan.sort((a, b) => b.datum.localeCompare(a.datum));
+
+  // Dubbele regels van een gezamenlijke klus tonen we als één regel.
+  const uniek = [];
+  gedaan.forEach((g) => {
+    if (g.klus.wie === "beiden" && uniek.some((u) => u.klus.id === g.klus.id && u.datum === g.datum)) return;
+    uniek.push(g);
+  });
+
+  const herstel = (g) => {
+    if (!confirm(`"${g.klus.titel}" terugzetten bij de openstaande klussen?`)) return;
+    vinkAf(g.klus.id);
+  };
 
   return (
     <Kaart>
-      <Kop>vandaag afgerond</Kop>
-      {gedaan.length === 0 ? <Leeg>Nog niets afgevinkt vandaag.</Leeg> : (
+      <Kop extra={
+        <div className="flex gap-1">
+          {[{ v: "vandaag", l: "vandaag" }, { v: "week", l: "deze week" }].map((o) => (
+            <button key={o.v} onClick={() => zetBereik(o.v)} className="rounded-full px-2 py-1 text-xs"
+              style={{ background: bereik === o.v ? INK : PAPIER, color: bereik === o.v ? "#fff" : ZACHT, fontFamily: MONO }}>{o.l}</button>
+          ))}
+        </div>
+      }>
+        afgerond
+      </Kop>
+
+      {uniek.length === 0 ? <Leeg>Nog niets afgevinkt {bereik === "vandaag" ? "vandaag" : "deze week"}.</Leeg> : (
         <ul className="space-y-2">
-          {gedaan.map((g) => {
+          {uniek.map((g) => {
             const i = personen.findIndex((p) => p.pid === g.door);
+            const d = new Date(g.datum + "T12:00:00");
             return (
-              <li key={g.id} className="flex items-center gap-3">
+              <li key={g.sleutel} className="flex items-center gap-3">
                 <Avatar persoon={personen[i]} kleur={KLEUREN[i] || ZACHT} maat={20} rand={LIJN} />
-                <span className="flex-1 text-sm" style={{ color: ZACHT, textDecoration: "line-through" }}>{g.titel}</span>
-                <span className="text-xs" style={{ color: KLEUREN[i] || ZACHT, fontFamily: MONO }}>{personen[i]?.naam || "?"}</span>
+                <span className="flex-1 text-sm" style={{ color: ZACHT, textDecoration: "line-through" }}>{g.klus.titel}</span>
+                {bereik === "week" && (
+                  <span className="text-xs" style={{ color: LIJN, fontFamily: MONO }}>
+                    {DAGEN[(d.getDay() + 6) % 7].slice(0, 2)}
+                  </span>
+                )}
+                <span className="text-xs" style={{ color: KLEUREN[i] || ZACHT, fontFamily: MONO }}>
+                  {g.klus.wie === "beiden" ? "samen" : personen[i]?.naam || "?"}
+                </span>
                 <span className="text-xs" style={{ color: LIJN, fontFamily: MONO, fontWeight: 700 }}>{g.punten}p</span>
+                <button onClick={() => herstel(g)} style={{ color: ZACHT }} aria-label="Terugzetten">
+                  <RotateCcw size={14} />
+                </button>
               </li>
             );
           })}
@@ -485,10 +524,9 @@ function Maandprijs({ personen, klussen, ik, rondes, zetRondes }) {
 }
 
 /* ---------- scherm: vandaag ---------- */
-function Vandaag({ ik, personen, klussen, vinkAf, boodschappen, weekmenu, wensen, prive, zetPrive, gaNaar, rondes, zetRondes }) {
+function Vandaag({ ik, personen, klussen, vinkAf, boodschappen, wensen, prive, zetPrive, gaNaar, rondes, zetRondes }) {
   const nu = new Date();
   const [nieuw, zetNieuw] = useState("");
-  const eten = weekmenu[sleutelVan(nu)];
   const teKopen = boodschappen.filter((b) => !b.af).length;
   const wensTotaal = wensen.filter((w) => !w.gekocht).reduce((s, w) => s + (Number(w.prijs) || 0), 0);
   const mijnKleur = KLEUREN[personen.findIndex((p) => p.pid === ik.pid)] || INK;
@@ -506,22 +544,7 @@ function Vandaag({ ik, personen, klussen, vinkAf, boodschappen, weekmenu, wensen
 
       <MijnTaken ik={ik} klussen={klussen} vinkAf={vinkAf} kleur={mijnKleur} />
 
-      <VandaagAfgerond klussen={klussen} personen={personen} />
-
-      <Kaart>
-        <Kop>vanavond eten</Kop>
-        {eten?.gerecht ? (
-          <div>
-            <p className="text-2xl leading-tight" style={{ fontFamily: DISPLAY, fontWeight: 800, color: INK }}>{eten.gerecht}</p>
-            {eten.kok && <p className="mt-1 text-sm" style={{ color: ZACHT }}>Kookt: {personen.find((p) => p.pid === eten.kok)?.naam || "samen"}</p>}
-            {eten.status === "wacht" && <p className="mt-1 text-xs" style={{ color: SAMEN, fontFamily: MONO }}>wacht op akkoord</p>}
-          </div>
-        ) : (
-          <button onClick={() => gaNaar("eten")} className="w-full text-left">
-            <p className="text-lg" style={{ fontFamily: DISPLAY, fontWeight: 700, color: ZACHT }}>Nog niets gepland. Vul het weekmenu.</p>
-          </button>
-        )}
-      </Kaart>
+      <Afgerond klussen={klussen} personen={personen} vinkAf={vinkAf} />
 
       <div className="grid grid-cols-2 gap-3">
         <button onClick={() => gaNaar("boodschappen")} className="rounded-2xl p-4 text-left" style={{ background: KAART, border: `1px solid ${LIJN}` }}>
@@ -561,22 +584,30 @@ function Vandaag({ ik, personen, klussen, vinkAf, boodschappen, weekmenu, wensen
 
 /* ---------- scherm: boodschappen ---------- */
 const CATS = ["vers", "voorraad", "huis", "anders"];
-function Boodschappen({ lijst, zetLijst, vast, zetVast, ik }) {
+function Boodschappen({ lijst, zetLijst, vast, zetVast, ik, personen }) {
   const [tekst, zetTekst] = useState("");
   const [cat, zetCat] = useState("vers");
-  const [toonVast, zetToonVast] = useState(false);
   const open = lijst.filter((b) => !b.af);
   const af = lijst.filter((b) => b.af);
+  const ander = personen.find((p) => p.pid !== ik.pid);
 
   const voegToe = () => {
     if (!tekst.trim()) return;
     zetLijst([...lijst, { id: id(), tekst: tekst.trim(), cat, af: false, door: ik.pid }]);
     zetTekst("");
   };
-  const staatVast = (b) => vast.some((v) => v.tekst.toLowerCase() === b.tekst.toLowerCase());
-  const wisselVast = (b) => {
-    if (staatVast(b)) zetVast(vast.filter((v) => v.tekst.toLowerCase() !== b.tekst.toLowerCase()));
-    else zetVast([...vast, { id: id(), tekst: b.tekst, cat: b.cat }]);
+
+  const staatVast = (naam) => vast.some((v) => v.tekst.toLowerCase() === naam.toLowerCase());
+
+  // Toevoegen aan de vaste lijst kan alleen hier. Verwijderen kan alleen bij de vaste lijst zelf,
+  // zodat afvinken of wissen van de boodschappenlijst er nooit iets uithaalt.
+  const zetOpVast = (b) => {
+    if (staatVast(b.tekst)) return;
+    zetVast([...vast, { id: id(), tekst: b.tekst, cat: b.cat, door: ik.pid }]);
+  };
+  const haalVanVast = (v) => {
+    if (!confirm(`"${v.tekst}" definitief van de vaste bestelling halen?`)) return;
+    zetVast(vast.filter((x) => x.id !== v.id));
   };
   const opLijst = (v) => {
     if (lijst.some((b) => !b.af && b.tekst.toLowerCase() === v.tekst.toLowerCase())) return;
@@ -611,53 +642,27 @@ function Boodschappen({ lijst, zetLijst, vast, zetVast, ik }) {
           <Kaart key={c}>
             <Kop>{c}</Kop>
             <ul className="space-y-2">
-              {items.map((b) => (
-                <li key={b.id} className="flex items-center gap-3">
-                  <button onClick={() => zetLijst(lijst.map((x) => x.id === b.id ? { ...x, af: true } : x))}
-                    className="h-6 w-6 shrink-0 rounded-md" style={{ border: `1.5px solid ${LIJN}` }} aria-label={`${b.tekst} afvinken`} />
-                  <span className="flex-1 text-sm" style={{ color: INK }}>{b.tekst}</span>
-                  <button onClick={() => wisselVast(b)} aria-label="Vaste bestelling">
-                    <Repeat size={16} color={staatVast(b) ? GEEL : LIJN} />
-                  </button>
-                  <button onClick={() => zetLijst(lijst.filter((x) => x.id !== b.id))} style={{ color: LIJN }}><X size={16} /></button>
-                </li>
-              ))}
+              {items.map((b) => {
+                const vastItem = staatVast(b.tekst);
+                return (
+                  <li key={b.id} className="flex items-center gap-3">
+                    <button onClick={() => zetLijst(lijst.map((x) => x.id === b.id ? { ...x, af: true } : x))}
+                      className="h-6 w-6 shrink-0 rounded-md" style={{ border: `1.5px solid ${LIJN}` }} aria-label={`${b.tekst} afvinken`} />
+                    <span className="flex-1 text-sm" style={{ color: INK }}>{b.tekst}</span>
+                    <button onClick={() => zetOpVast(b)} aria-label="Op de vaste bestelling zetten"
+                      title={vastItem ? "Staat op de vaste bestelling" : "Op de vaste bestelling zetten"}>
+                      <Repeat size={16} color={vastItem ? GEEL : LIJN} />
+                    </button>
+                    <button onClick={() => zetLijst(lijst.filter((x) => x.id !== b.id))} style={{ color: LIJN }}><X size={16} /></button>
+                  </li>
+                );
+              })}
             </ul>
           </Kaart>
         );
       })}
 
       {open.length === 0 && <Kaart><Leeg>De lijst is leeg. Typ hierboven wat er nodig is.</Leeg></Kaart>}
-
-      <Kaart style={vast.length ? { borderColor: GEEL } : {}}>
-        <Kop extra={
-          <button onClick={() => zetToonVast(!toonVast)} className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>
-            {toonVast ? "inklappen" : "uitklappen"}
-          </button>
-        }>
-          vaste bestelling · {vast.length}
-        </Kop>
-        <p className="-mt-2 mb-2 text-xs" style={{ color: ZACHT }}>
-          Tik op het rondje met pijltjes achter een product om het hier te bewaren voor de volgende bestelling.
-        </p>
-        {toonVast && (vast.length === 0 ? <Leeg>Nog niets vastgezet.</Leeg> : (
-          <>
-            <ul className="space-y-2">
-              {vast.map((v) => (
-                <li key={v.id} className="flex items-center gap-3">
-                  <button onClick={() => opLijst(v)} className="rounded-full px-2 py-1 text-xs"
-                    style={{ background: GEEL, color: INK, fontFamily: MONO }}>op lijst</button>
-                  <span className="flex-1 text-sm" style={{ color: INK }}>{v.tekst}</span>
-                  <button onClick={() => zetVast(vast.filter((x) => x.id !== v.id))} style={{ color: LIJN }}><X size={16} /></button>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3">
-              <Knop onClick={allesOpLijst} kleur={INK} klein>Alles op de lijst</Knop>
-            </div>
-          </>
-        ))}
-      </Kaart>
 
       {af.length > 0 && (
         <Kaart>
@@ -676,6 +681,38 @@ function Boodschappen({ lijst, zetLijst, vast, zetVast, ik }) {
           </ul>
         </Kaart>
       )}
+
+      <Kaart style={{ borderColor: GEEL, borderWidth: 2 }}>
+        <Kop extra={vast.length > 0 ? <Knop onClick={allesOpLijst} kleur={INK} klein>Alles op de lijst</Knop> : null}>
+          vaste bestelling · {vast.length}
+        </Kop>
+        <p className="-mt-2 mb-3 text-xs" style={{ color: ZACHT }}>
+          Blijft permanent staan, ook na afvinken. {ander ? `${ander.naam} ziet dezelfde lijst.` : ""} Weghalen doe je met het kruisje hier.
+        </p>
+        {vast.length === 0 ? (
+          <Leeg>Tik op het rondje met pijltjes achter een boodschap om hem hier vast te zetten.</Leeg>
+        ) : (
+          <ul className="space-y-2">
+            {vast.map((v) => {
+              const staatAlOpLijst = lijst.some((b) => !b.af && b.tekst.toLowerCase() === v.tekst.toLowerCase());
+              const i = personen.findIndex((p) => p.pid === v.door);
+              return (
+                <li key={v.id} className="flex items-center gap-3">
+                  <button onClick={() => opLijst(v)} disabled={staatAlOpLijst} className="rounded-full px-2 py-1 text-xs"
+                    style={{ background: staatAlOpLijst ? PAPIER : GEEL, color: staatAlOpLijst ? ZACHT : INK, fontFamily: MONO }}>
+                    {staatAlOpLijst ? "staat erop" : "op lijst"}
+                  </button>
+                  <span className="flex-1 text-sm" style={{ color: INK }}>{v.tekst}</span>
+                  {i >= 0 && <Avatar persoon={personen[i]} kleur={KLEUREN[i]} maat={18} rand={LIJN} />}
+                  <button onClick={() => haalVanVast(v)} style={{ color: LIJN }} aria-label="Van de vaste bestelling halen">
+                    <X size={16} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Kaart>
     </div>
   );
 }
@@ -1183,138 +1220,6 @@ function Klussen({ klussen, zetKlussen, personen, ik, vinkAf, meld, zetHuisgenot
   );
 }
 
-/* ---------- scherm: weekmenu ---------- */
-function Weekmenu({ menu, zetMenu, personen, ik, boodschappen, zetBoodschappen, meld }) {
-  const [offset, zetOffset] = useState(0);
-  const start = plusDagen(maandagVan(new Date()), offset * 7);
-  const [bewerk, zetBewerk] = useState(null);
-  const [gerecht, zetGerecht] = useState("");
-  const [ingredienten, zetIngredienten] = useState("");
-  const [kok, zetKok] = useState("");
-  const ander = personen.find((p) => p.pid !== ik.pid);
-
-  const openen = (sl) => {
-    const m = menu[sl] || {};
-    zetGerecht(m.gerecht || ""); zetIngredienten(m.ingredienten || ""); zetKok(m.kok || "");
-    zetBewerk(sl);
-  };
-  const opslaan = () => {
-    const dagNaam = DAGEN[(new Date(bewerk + "T12:00:00").getDay() + 6) % 7];
-    zetMenu({ ...menu, [bewerk]: {
-      gerecht: gerecht.trim(), ingredienten: ingredienten.trim(), kok,
-      status: ander ? "wacht" : "akkoord", door: ik.pid,
-    } });
-    if (ander && gerecht.trim()) {
-      meld(ander.pid, "Voorstel voor het eten", `${dagNaam}: ${gerecht.trim()}. Ga je akkoord?`);
-    }
-    zetBewerk(null);
-  };
-  const beamen = (sl) => {
-    zetMenu({ ...menu, [sl]: { ...menu[sl], status: "akkoord" } });
-    meld(menu[sl].door, "Menu goedgekeurd", `${ik.naam} gaat akkoord met ${menu[sl].gerecht}`);
-  };
-  const afwijzen = (sl) => {
-    const gerechtNaam = menu[sl].gerecht;
-    const rest = { ...menu };
-    delete rest[sl];
-    zetMenu(rest);
-    meld(menu[sl].door, "Menu afgewezen", `${ik.naam} ziet ${gerechtNaam} niet zitten. Kies samen iets anders.`);
-  };
-  const naarLijst = (sl) => {
-    const m = menu[sl];
-    if (!m?.ingredienten) return;
-    const nieuw = m.ingredienten.split(",").map((s) => s.trim()).filter(Boolean)
-      .map((t) => ({ id: id(), tekst: t, cat: "vers", af: false }));
-    zetBoodschappen([...boodschappen, ...nieuw]);
-    if (ander) meld(ander.pid, "Boodschappen toegevoegd", `${ik.naam} zette de ingredienten voor ${m.gerecht} op de lijst`);
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <button onClick={() => zetOffset(offset - 1)} style={{ color: ZACHT }}><ChevronLeft size={20} /></button>
-        <p className="text-sm" style={{ fontFamily: MONO, color: ZACHT }}>
-          {offset === 0 ? "deze week" : offset === 1 ? "volgende week" : `${start.getDate()} ${MAANDEN[start.getMonth()]}`}
-        </p>
-        <button onClick={() => zetOffset(offset + 1)} style={{ color: ZACHT }}><ChevronRight size={20} /></button>
-      </div>
-
-      {DAGEN.map((dag, i) => {
-        const d = plusDagen(start, i);
-        const sl = sleutelVan(d);
-        const m = menu[sl];
-        const vandaag = zelfdeDag(d, new Date());
-        const wacht = m?.gerecht && m.status === "wacht";
-        const ikMoetKeuren = wacht && m.door !== ik.pid;
-        return (
-          <Kaart key={sl} style={vandaag ? { border: `2px solid ${GEEL}` } : wacht ? { border: `2px solid ${SAMEN}` } : {}}>
-            <div className="flex items-start justify-between gap-3">
-              <button onClick={() => openen(sl)} className="flex-1 text-left">
-                <p className="text-xs uppercase tracking-widest" style={{ fontFamily: MONO, color: vandaag ? GEEL : ZACHT }}>
-                  {dag} {d.getDate()}
-                </p>
-                <p className="mt-1 text-lg leading-snug" style={{ fontFamily: DISPLAY, fontWeight: 700, color: m?.gerecht ? INK : LIJN }}>
-                  {m?.gerecht || "Tik om te plannen"}
-                </p>
-                {m?.kok && (
-                  <p className="text-xs" style={{ color: KLEUREN[personen.findIndex((p) => p.pid === m.kok)] || ZACHT }}>
-                    kookt: {personen.find((p) => p.pid === m.kok)?.naam}
-                  </p>
-                )}
-              </button>
-              {m?.ingredienten && m.status !== "wacht" && (
-                <button onClick={() => naarLijst(sl)} className="shrink-0 rounded-full px-2 py-1 text-xs"
-                  style={{ border: `1px solid ${LIJN}`, color: ZACHT, fontFamily: MONO }}>op lijst</button>
-              )}
-            </div>
-
-            {wacht && (
-              <div className="mt-2">
-                {ikMoetKeuren ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs" style={{ color: SAMEN, fontFamily: MONO }}>
-                      voorstel van {personen.find((p) => p.pid === m.door)?.naam}
-                    </span>
-                    <Knop onClick={() => beamen(sl)} kleur={SAMEN} klein>Lekker</Knop>
-                    <Knop onClick={() => afwijzen(sl)} kleur={ZACHT} vol={false} klein>Liever niet</Knop>
-                  </div>
-                ) : (
-                  <span className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>
-                    wacht op akkoord van {ander ? ander.naam : "de ander"}
-                  </span>
-                )}
-              </div>
-            )}
-          </Kaart>
-        );
-      })}
-
-      {bewerk && (
-        <div className="fixed inset-0 z-30 flex items-end justify-center p-4" style={{ background: "rgba(22,36,31,.45)" }}
-          onClick={() => zetBewerk(null)}>
-          <div className="w-full max-w-md rounded-2xl p-4" style={{ background: KAART }} onClick={(e) => e.stopPropagation()}>
-            <p className="mb-3 text-xs uppercase tracking-widest" style={{ fontFamily: MONO, color: ZACHT }}>maaltijd voorstellen</p>
-            <div className="space-y-2">
-              <Invoer waarde={gerecht} zet={zetGerecht} plaats="Gerecht" />
-              <Invoer waarde={ingredienten} zet={zetIngredienten} plaats="Ingredienten, gescheiden door komma" />
-              <div className="flex flex-wrap gap-2 pt-1">
-                {[...personen.map((p) => ({ v: p.pid, l: p.naam })), { v: "", l: "samen" }].map((o) => (
-                  <button key={o.l} onClick={() => zetKok(o.v)} className="rounded-full px-3 py-1 text-xs"
-                    style={{ background: kok === o.v ? INK : PAPIER, color: kok === o.v ? "#fff" : ZACHT, fontFamily: MONO }}>{o.l}</button>
-                ))}
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Knop onClick={() => zetBewerk(null)} vol={false} kleur={ZACHT}>Annuleren</Knop>
-              <Knop onClick={opslaan}>{ander ? "Voorstellen" : "Opslaan"}</Knop>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ---------- scherm: wenslijst ---------- */
 function Wensen({ wensen, zetWensen, ik, personen }) {
   const [tekst, zetTekst] = useState("");
@@ -1574,7 +1479,7 @@ export default function Huishoudapp({ gebruiker }) {
         <style>{stijl}</style>
         <h1 className="text-4xl leading-tight" style={{ fontFamily: DISPLAY, fontWeight: 800, color: INK }}>Ons huis</h1>
         <p className="mt-2 mb-6 text-sm" style={{ color: ZACHT }}>
-          Boodschappen, klussen, weekmenu en wensen op één plek. De gedeelde lijsten zijn zichtbaar voor iedereen met deze app.
+          Boodschappen, klussen, punten en wensen op één plek. De gedeelde lijsten zijn zichtbaar voor iedereen met deze app.
         </p>
         {personen.length > 0 && (
           <div className="mb-4 space-y-2">
@@ -1611,12 +1516,11 @@ export default function Huishoudapp({ gebruiker }) {
   }
 
   const nu = new Date();
-  const titels = { vandaag: `Hoi ${ik.naam}`, boodschappen: "Boodschappen", klussen: "Klussen", eten: "Weekmenu", wensen: "Wensen" };
+  const titels = { vandaag: `Hoi ${ik.naam}`, boodschappen: "Boodschappen", klussen: "Klussen", wensen: "Wensen" };
   const tabs = [
     { k: "vandaag", l: "Vandaag", I: Home },
     { k: "boodschappen", l: "Lijst", I: ShoppingBasket },
     { k: "klussen", l: "Klussen", I: Sparkles },
-    { k: "eten", l: "Eten", I: UtensilsCrossed },
     { k: "wensen", l: "Wensen", I: Heart },
   ];
 
@@ -1656,12 +1560,11 @@ export default function Huishoudapp({ gebruiker }) {
       <main className="flex-1 overflow-y-auto px-5 pb-6">
         {tab === "vandaag" && (
           <Vandaag ik={ik} personen={personen} klussen={klussen} vinkAf={vinkAf} boodschappen={boodschappen}
-            weekmenu={menu} wensen={wensen} prive={prive} zetPrive={zetPrive} gaNaar={zetTab}
+            wensen={wensen} prive={prive} zetPrive={zetPrive} gaNaar={zetTab}
             rondes={rondes} zetRondes={zetRondes} />
         )}
-        {tab === "boodschappen" && <Boodschappen lijst={boodschappen} zetLijst={zetBoodschappen} vast={vast} zetVast={zetVast} ik={ik} />}
+        {tab === "boodschappen" && <Boodschappen lijst={boodschappen} zetLijst={zetBoodschappen} vast={vast} zetVast={zetVast} ik={ik} personen={personen} />}
         {tab === "klussen" && <Klussen klussen={klussen} zetKlussen={zetKlussen} personen={personen} ik={ik} vinkAf={vinkAf} meld={meld} zetHuisgenoten={zetHuisgenoten} />}
-        {tab === "eten" && <Weekmenu menu={menu} zetMenu={zetMenu} personen={personen} ik={ik} boodschappen={boodschappen} zetBoodschappen={zetBoodschappen} meld={meld} />}
         {tab === "wensen" && <Wensen wensen={wensen} zetWensen={zetWensen} ik={ik} personen={personen} />}
       </main>
 
