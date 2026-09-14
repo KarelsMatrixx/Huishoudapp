@@ -1331,6 +1331,7 @@ export default function Huishoudapp({ gebruiker }) {
     zetMenuS(me || {});
     zetWensenS(we || []);
     zetPriveS(pr || []);
+    zetVastS(va || []);
       laatsteSync.current = Date.now();
       zetGeladen(true);
       zetLaadFout(null);
