@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Home, ShoppingBasket, Sparkles, Heart,
-  Plus, Check, X, RefreshCw, Trash2, ArrowLeftRight, ChevronLeft, ChevronRight, Bell, BellOff, MessageCircle, Send, Camera, ChevronDown, LogOut, Repeat, RotateCcw
+  Plus, Check, X, RefreshCw, Trash2, ArrowLeftRight, ChevronLeft, ChevronRight, Bell, BellOff, MessageCircle, Send, Camera, ChevronDown, LogOut, Repeat, RotateCcw, ExternalLink
 } from "lucide-react";
 import { laad, bewaar, luister, meldingenAanzetten, meldingStand, afmelden } from "./opslag";
 
@@ -1221,7 +1221,45 @@ function Klussen({ klussen, zetKlussen, personen, ik, vinkAf, meld, zetHuisgenot
 }
 
 /* ---------- scherm: wenslijst ---------- */
-function Wensen({ wensen, zetWensen, ik, personen }) {
+function Deals({ deals, wensen }) {
+  const [open, zetOpen] = useState(true);
+  const items = (deals?.items || []).filter((d) => wensen.some((w) => w.id === d.wensId && !w.gekocht));
+  const st = deals?.status;
+  const tijd = st?.moment ? new Date(st.moment).toLocaleString("nl-NL", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  return (
+    <Kaart>
+      <button onClick={() => zetOpen(!open)} className="flex w-full items-center justify-between text-left">
+        <span className="text-xs uppercase tracking-widest" style={{ fontFamily: MONO, color: ZACHT }}>
+          marktplaats deals · {items.length}
+        </span>
+        <ChevronDown size={16} color={ZACHT} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+      </button>
+      {st && st.ok === false && (
+        <p className="mt-2 text-xs" style={{ color: "#B3402A" }}>De laatste zoekronde mislukte ({tijd}). Oude deals blijven staan.</p>
+      )}
+      {!deals && <p className="mt-2 text-xs" style={{ color: ZACHT }}>De bot heeft nog niet gezocht. Eerste ronde volgt automatisch.</p>}
+      {open && items.map((d) => (
+        <a key={d.id} href={d.url} target="_blank" rel="noopener noreferrer"
+          className="mt-3 flex items-center gap-3 rounded-xl p-2" style={{ background: PAPIER }}>
+          {d.foto ? <img src={d.foto.startsWith("//") ? "https:" + d.foto : d.foto} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" /> : <div className="h-14 w-14 shrink-0 rounded-lg" style={{ background: LIJN }} />}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm" style={{ color: INK, fontWeight: 600 }}>{d.titel}</p>
+            <p className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>
+              €{d.prijs} <span style={{ textDecoration: "line-through" }}>€{d.richtprijs}</span> · {d.plaats}{d.afstandKm != null ? ` ${d.afstandKm} km` : ""}
+            </p>
+            <p className="truncate text-xs" style={{ color: ZACHT }}>voor: {d.wens}{d.nieuw ? " · nieuw" : ""}</p>
+          </div>
+          <ExternalLink size={16} color={ZACHT} />
+        </a>
+      ))}
+      {open && deals && items.length === 0 && st?.ok !== false && (
+        <p className="mt-2 text-xs" style={{ color: ZACHT }}>Vandaag niets onder de richtprijs gevonden{tijd ? ` (gezocht ${tijd})` : ""}.</p>
+      )}
+    </Kaart>
+  );
+}
+
+function Wensen({ wensen, zetWensen, ik, personen, deals }) {
   const [tekst, zetTekst] = useState("");
   const [ruimte, zetRuimte] = useState("");
   const [prijs, zetPrijs] = useState("");
@@ -1246,6 +1284,8 @@ function Wensen({ wensen, zetWensen, ik, personen }) {
         <p className="mt-1 text-4xl" style={{ fontFamily: MONO, fontWeight: 700, color: "#fff" }}>€{totaal.toLocaleString("nl-NL")}</p>
         <p className="text-xs" style={{ color: "#9FB0A8" }}>{eens.length} van {open.length} waar jullie het allebei over eens zijn</p>
       </Kaart>
+
+      <Deals deals={deals} wensen={wensen} />
 
       <Kaart>
         <Invoer waarde={tekst} zet={zetTekst} plaats="Wat willen jullie kopen?" opEnter={voegToe} />
@@ -1302,6 +1342,7 @@ export default function Huishoudapp({ gebruiker }) {
   const [prive, zetPriveS] = useState([]);
   const [rondes, zetRondesS] = useState({});
   const [uitgaand, zetUitgaandS] = useState([]);
+  const [deals, zetDeals] = useState(null);
   const [chat, zetChatS] = useState([]);
   const [vast, zetVastS] = useState([]);
   const [chatOpen, zetChatOpen] = useState(false);
@@ -1316,10 +1357,10 @@ export default function Huishoudapp({ gebruiker }) {
 
   const haalOp = useCallback(async () => {
     try {
-    const [hg, bo, kl, me, we, pr, ro, ui, ch, va] = await Promise.all([
+    const [hg, bo, kl, me, we, pr, ro, ui, ch, va, dl] = await Promise.all([
       laad("huisgenoten", true), laad("boodschappen", true),
       laad("klussen", true), laad("weekmenu", true), laad("wensen", true), laad("prive", false),
-      laad("maandrondes", true), laad("uitgaand", true), laad("chat", true), laad("vastelijst", true),
+      laad("maandrondes", true), laad("uitgaand", true), laad("chat", true), laad("vastelijst", true), laad("deals", true),
     ]);
     zetRondesS(ro || {});
     zetUitgaandS(ui || []);
@@ -1332,6 +1373,7 @@ export default function Huishoudapp({ gebruiker }) {
     zetWensenS(we || []);
     zetPriveS(pr || []);
     zetVastS(va || []);
+    zetDeals(dl || null);
       laatsteSync.current = Date.now();
       zetGeladen(true);
       zetLaadFout(null);
@@ -1566,7 +1608,7 @@ export default function Huishoudapp({ gebruiker }) {
         )}
         {tab === "boodschappen" && <Boodschappen lijst={boodschappen} zetLijst={zetBoodschappen} vast={vast} zetVast={zetVast} ik={ik} personen={personen} />}
         {tab === "klussen" && <Klussen klussen={klussen} zetKlussen={zetKlussen} personen={personen} ik={ik} vinkAf={vinkAf} meld={meld} zetHuisgenoten={zetHuisgenoten} />}
-        {tab === "wensen" && <Wensen wensen={wensen} zetWensen={zetWensen} ik={ik} personen={personen} />}
+        {tab === "wensen" && <Wensen wensen={wensen} zetWensen={zetWensen} ik={ik} personen={personen} deals={deals} />}
       </main>
 
       {!chatOpen && (
