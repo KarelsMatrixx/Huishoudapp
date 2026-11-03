@@ -14,9 +14,8 @@ export default function Poort() {
 
   if (sessie === undefined) {
     return (
-      <div className="flex h-screen items-center justify-center"
-        style={{ background: "#EDF0EA", color: "#5C6B64", fontFamily: "'Instrument Sans', system-ui, sans-serif" }}>
-        Even laden…
+      <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p className="display" style={{ fontSize: 22, fontWeight: 700, color: "var(--zacht)" }}>Ons huis</p>
       </div>
     );
   }

@@ -1,1343 +1,63 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import {
-  Home, ShoppingBasket, Sparkles, Heart,
-  Plus, Check, X, RefreshCw, Trash2, ArrowLeftRight, ChevronLeft, ChevronRight, Bell, BellOff, MessageCircle, Send, Camera, ChevronDown, LogOut, Repeat, RotateCcw, ExternalLink
-} from "lucide-react";
+import { Home, ListChecks, Plus, Trophy, MessageCircle, Camera } from "lucide-react";
 import { laad, bewaar, luister, meldingenAanzetten, meldingStand, afmelden } from "./opslag";
+import { id, sleutelVan, staatOpen, piep, lokaal } from "./logica";
+import { Knop, Avatar, FotoKnop, Veld, useOpstijg } from "./ui";
+import Thuis from "./schermen/Thuis";
+import Lijsten, { BALK_ONDER } from "./schermen/Lijsten";
+import Stand from "./schermen/Stand";
+import Chat, { ongelezen } from "./schermen/Chat";
+import KlusSheet from "./schermen/KlusSheet";
+import { SnelToevoegen, InzetSheet, ProfielSheet } from "./schermen/Sheets";
 
-/* ---------- tokens ---------- */
-const INK = "#16241F";
-const ZACHT = "#5C6B64";
-const PAPIER = "#EDF0EA";
-const KAART = "#FFFFFF";
-const LIJN = "#DCE2D9";
-const GEEL = "#E8B33D";
-const KLEUREN = ["#1F6F62", "#B4436C"];
-const SAMEN = "#6B5BA8";
-
-const DISPLAY = "'Bricolage Grotesque', 'Trebuchet MS', sans-serif";
-const BODY = "'Instrument Sans', system-ui, sans-serif";
-const MONO = "'Space Mono', ui-monospace, monospace";
-
-/* ---------- opslag: zie src/opslag.js (Supabase + meldingen) ---------- */
-
-/* ---------- datum ---------- */
-const DAGEN = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"];
-const MAANDEN = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
-const sleutelVan = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-function maandagVan(d) {
-  const n = new Date(d);
-  const v = (n.getDay() + 6) % 7;
-  n.setDate(n.getDate() - v);
-  n.setHours(0, 0, 0, 0);
-  return n;
-}
-const plusDagen = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-const zelfdeDag = (a, b) => sleutelVan(a) === sleutelVan(b);
-const id = () => Math.random().toString(36).slice(2, 9);
-
-/* ---------- klusritme ---------- */
-function staatOpen(klus, nu) {
-  if (!klus.laatst) return true;
-  const d = new Date(klus.laatst + "T12:00:00");
-  if (klus.ritme === "eenmalig") return false;
-  if (klus.ritme === "dag") return !zelfdeDag(d, nu);
-  if (klus.ritme === "week" || klus.ritme === "weekvrij") return maandagVan(d).getTime() !== maandagVan(nu).getTime();
-  return d.getMonth() !== nu.getMonth() || d.getFullYear() !== nu.getFullYear();
-}
-const RITMES = { dag: "elke dag", week: "vaste dag", weekvrij: "vrij in de week", maand: "elke maand", eenmalig: "eenmalig" };
-
-/* ---------- punten ---------- */
-const PUNTOPTIES = [1, 2, 3, 5, 8];
-const maandSleutel = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-function puntenVan(klussen, pid, test) {
-  return klussen.reduce((n, k) => n + (k.geschiedenis || [])
-    .filter((g) => g.door === pid && test(g.datum))
-    .reduce((s, g) => s + (g.punten ?? 1), 0), 0);
-}
-
-/* ---------- kleine bouwstenen ---------- */
-function Kaart({ children, style }) {
+/* ---------- de onderste balk ---------- */
+function Tabbalk({ tab, kies, plus, badgeChat, stipLijsten }) {
+  const Tab = ({ k, l, I, badge, stip }) => {
+    const actief = tab === k;
+    return (
+      <button type="button" aria-label={badge ? `${l}, ${badge} ongelezen` : l} aria-current={actief ? "page" : undefined} onClick={() => kies(k)}
+        style={{ position: "relative", width: 62, height: 52, border: 0, borderRadius: 26, background: actief ? "var(--linnen)" : "transparent",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, color: actief ? "var(--ink)" : "var(--zacht)" }}>
+        <I size={22} strokeWidth={actief ? 2.3 : 2} />
+        <span style={{ fontSize: 10.5, fontWeight: actief ? 700 : 600 }}>{l}</span>
+        {badge > 0 && (
+          <span style={{ position: "absolute", top: 3, right: 10, minWidth: 18, height: 18, padding: "0 5px", boxSizing: "border-box", borderRadius: 9, background: "var(--p1)", color: "var(--op-kleur)", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--kaart)" }}>{badge > 9 ? "9+" : badge}</span>
+        )}
+        {stip && <span style={{ position: "absolute", top: 6, right: 16, width: 9, height: 9, borderRadius: "50%", background: "var(--honing)", border: "2px solid var(--kaart)" }} />}
+      </button>
+    );
+  };
   return (
-    <div className="rounded-2xl p-4" style={{ background: KAART, border: `1px solid ${LIJN}`, ...style }}>
+    <nav aria-label="Hoofdmenu" style={{
+      position: "fixed", left: 14, right: 14, bottom: BALK_ONDER, zIndex: 40, height: 66, borderRadius: 33, maxWidth: 532, margin: "0 auto",
+      background: "var(--balk)", backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+      border: "1px solid var(--kaartrand)", boxShadow: "var(--schaduw-balk)", display: "flex", alignItems: "center", justifyContent: "space-around", padding: "0 6px",
+    }}>
+      <Tab k="thuis" l="Thuis" I={Home} />
+      <Tab k="lijsten" l="Lijsten" I={ListChecks} stip={stipLijsten} />
+      <button type="button" aria-label="Snel toevoegen" onClick={plus} className="druk"
+        style={{ width: 54, height: 54, border: 0, borderRadius: "50%", background: "var(--knop)", color: "var(--knop-tekst)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 16px rgba(43,36,32,0.3)", flex: "none" }}>
+        <Plus size={26} strokeWidth={2.6} />
+      </button>
+      <Tab k="stand" l="Stand" I={Trophy} />
+      <Tab k="chat" l="Chat" I={MessageCircle} badge={badgeChat} />
+    </nav>
+  );
+}
+
+function Midden({ children }) {
+  return (
+    <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", justifyContent: "center", padding: "calc(env(safe-area-inset-top) + 24px) 20px calc(env(safe-area-inset-bottom) + 24px)", maxWidth: 440, margin: "0 auto", boxSizing: "border-box" }}>
       {children}
     </div>
   );
 }
-function Kop({ children, extra }) {
-  return (
-    <div className="flex items-baseline justify-between mb-3">
-      <h2 className="text-xs uppercase tracking-widest" style={{ fontFamily: MONO, color: ZACHT }}>{children}</h2>
-      {extra}
-    </div>
-  );
-}
-function Leeg({ children }) {
-  return <p className="text-sm py-6 text-center" style={{ color: ZACHT }}>{children}</p>;
-}
-function Knop({ children, onClick, kleur = INK, vol = true, klein }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-full font-semibold transition-opacity ${klein ? "px-3 py-1 text-xs" : "px-4 py-2 text-sm"}`}
-      style={{
-        background: vol ? kleur : "transparent",
-        color: vol ? "#fff" : kleur,
-        border: vol ? "none" : `1.5px solid ${kleur}`,
-        fontFamily: BODY,
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-function Invoer({ waarde, zet, plaats, opEnter, style }) {
-  return (
-    <input
-      value={waarde}
-      placeholder={plaats}
-      onChange={(e) => zet(e.target.value)}
-      onKeyDown={(e) => { if (e.key === "Enter" && opEnter) opEnter(); }}
-      className="w-full rounded-xl px-3 py-2 text-sm outline-none"
-      style={{ background: PAPIER, border: `1px solid ${LIJN}`, color: INK, fontFamily: BODY, ...style }}
-    />
-  );
-}
 
-/* ---------- profielfoto ---------- */
-function Avatar({ persoon, kleur, maat = 24, rand = "#fff" }) {
-  const stijl = { width: maat, height: maat, borderRadius: "50%", border: `2px solid ${rand}`, objectFit: "cover" };
-  if (persoon?.foto) return <img src={persoon.foto} alt={persoon.naam} style={stijl} />;
-  return (
-    <span className="flex items-center justify-center" style={{ ...stijl, background: kleur, color: "#fff", fontSize: maat * 0.5, fontFamily: MONO, fontWeight: 700 }}>
-      {(persoon?.naam || "?").slice(0, 1).toUpperCase()}
-    </span>
-  );
-}
-
-// Maakt van een gekozen of gemaakte foto een klein vierkant plaatje.
-function fotoUit(bestand) {
-  return new Promise((klaar) => {
-    const lezer = new FileReader();
-    lezer.onload = () => {
-      const im = new Image();
-      im.onload = () => {
-        const z = 160;
-        const c = document.createElement("canvas");
-        c.width = z; c.height = z;
-        const k = Math.min(im.width, im.height);
-        c.getContext("2d").drawImage(im, (im.width - k) / 2, (im.height - k) / 2, k, k, 0, 0, z, z);
-        klaar(c.toDataURL("image/jpeg", 0.7));
-      };
-      im.src = lezer.result;
-    };
-    lezer.readAsDataURL(bestand);
-  });
-}
-
-function FotoKnop({ opFoto, children, style }) {
-  const ref = useRef(null);
-  return (
-    <>
-      <button onClick={() => ref.current?.click()} style={style}>{children}</button>
-      <input ref={ref} type="file" accept="image/*" capture="user" className="hidden"
-        onChange={async (e) => { const b = e.target.files?.[0]; if (b) opFoto(await fotoUit(b)); e.target.value = ""; }} />
-    </>
-  );
-}
-
-/* ---------- chat ---------- */
-function Chat({ chat, zetChat, ik, personen, meld, sluit }) {
-  const [tekst, zetTekst] = useState("");
-  const onder = useRef(null);
-  const ander = personen.find((p) => p.pid !== ik.pid);
-  useEffect(() => { onder.current?.scrollIntoView({ behavior: "smooth" }); }, [chat.length]);
-
-  const versturen = () => {
-    if (!tekst.trim()) return;
-    zetChat([...chat, { id: id(), door: ik.pid, tekst: tekst.trim(), moment: Date.now() }].slice(-200));
-    if (ander) meld(ander.pid, ik.naam, tekst.trim());
-    zetTekst("");
-  };
-
-  return (
-    <div className="fixed inset-0 z-40 flex flex-col" style={{ background: PAPIER }}>
-      <header className="flex items-center gap-3 px-5 pb-4" style={{ background: KAART, borderBottom: `1px solid ${LIJN}`, paddingTop: "calc(16px + env(safe-area-inset-top))" }}>
-        <button onClick={sluit} style={{ color: ZACHT }}><ChevronLeft size={22} /></button>
-        <Avatar persoon={ander} kleur={KLEUREN[personen.findIndex((p) => p.pid === ander?.pid)] || ZACHT} maat={32} rand={LIJN} />
-        <p className="text-lg" style={{ fontFamily: DISPLAY, fontWeight: 700, color: INK }}>{ander ? ander.naam : "Chat"}</p>
-      </header>
-
-      <div className="flex-1 space-y-2 overflow-y-auto px-4 py-4">
-        {chat.length === 0 && <Leeg>Nog geen berichten. Begin het gesprek.</Leeg>}
-        {chat.map((b) => {
-          const vanMij = b.door === ik.pid;
-          const i = personen.findIndex((p) => p.pid === b.door);
-          return (
-            <div key={b.id} className={`flex ${vanMij ? "justify-end" : "justify-start"}`}>
-              <div className="max-w-xs rounded-2xl px-3 py-2" style={{ background: vanMij ? KLEUREN[i] || INK : KAART, border: vanMij ? "none" : `1px solid ${LIJN}` }}>
-                <p className="text-sm" style={{ color: vanMij ? "#fff" : INK }}>{b.tekst}</p>
-                <p className="mt-1 text-right text-xs" style={{ fontFamily: MONO, color: vanMij ? "rgba(255,255,255,.6)" : LIJN }}>
-                  {new Date(b.moment).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}
-                </p>
-              </div>
-            </div>
-          );
-        })}
-        <div ref={onder} />
-      </div>
-
-      <div className="flex gap-2 px-4 pt-3" style={{ background: KAART, borderTop: `1px solid ${LIJN}`, paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
-        <Invoer waarde={tekst} zet={zetTekst} plaats="Bericht" opEnter={versturen} />
-        <button onClick={versturen} className="shrink-0 rounded-xl px-4" style={{ background: INK, color: "#fff" }}>
-          <Send size={18} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- signatuur: de weegschaal ---------- */
-function Weegschaal({ personen, klussen }) {
-  const nu = new Date();
-  const maand = maandSleutel(nu);
-  const telling = personen.map((p) => puntenVan(klussen, p.pid, (d) => String(d).startsWith(maand)));
-  const totaal = telling[0] + (telling[1] || 0);
-  const links = totaal ? telling[0] / totaal : 0.5;
-  const hoek = totaal ? (0.5 - links) * 14 : 0;
-
-  return (
-    <Kaart>
-      <Kop>huidige stand · {MAANDEN[new Date().getMonth()]}</Kop>
-      <div className="relative pt-2 pb-6">
-        <div
-          className="flex h-9 overflow-hidden rounded-lg weegbalk"
-          style={{ transform: `rotate(${hoek}deg)`, transformOrigin: "50% 50%" }}
-        >
-          <div className="flex items-center justify-start px-3" style={{ width: `${(totaal ? links : 0.5) * 100}%`, background: KLEUREN[0] }}>
-            <span className="text-xs font-bold text-white" style={{ fontFamily: MONO }}>{telling[0]}</span>
-          </div>
-          <div className="flex items-center justify-end px-3" style={{ flex: 1, background: personen[1] ? KLEUREN[1] : LIJN }}>
-            <span className="text-xs font-bold text-white" style={{ fontFamily: MONO }}>{telling[1] || 0}</span>
-          </div>
-        </div>
-        <div className="absolute left-1/2 -translate-x-1/2" style={{
-          bottom: 8, width: 0, height: 0,
-          borderLeft: "9px solid transparent", borderRight: "9px solid transparent",
-          borderBottom: `14px solid ${INK}`
-        }} />
-      </div>
-      <div className="flex justify-between text-sm">
-        {personen.map((p, i) => (
-          <span key={p.pid} className="font-semibold" style={{ color: KLEUREN[i] }}>{p.naam}</span>
-        ))}
-      </div>
-      {!totaal && <p className="mt-2 text-xs" style={{ color: ZACHT }}>Nog geen punten deze maand.</p>}
-    </Kaart>
-  );
-}
-
-/* ---------- vervaldag, geluid en dashboardblokken ---------- */
-function vervaldatumVan(klus, nu) {
-  if (klus.ritme === "dag") return sleutelVan(nu);
-  if (klus.ritme === "weekvrij") return null; // hele week open, geen vaste dag
-  if (klus.ritme === "eenmalig") return klus.dag || null;
-  if (klus.ritme === "week") return sleutelVan(plusDagen(maandagVan(nu), klus.dag ?? 6));
-  const d = Math.min(klus.dag ?? 1, 28);
-  return `${nu.getFullYear()}-${String(nu.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
-
-// Kort bevestigingstoontje bij het afvinken.
-function piep() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(660, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(990, ctx.currentTime + 0.09);
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.22);
-    osc.start(); osc.stop(ctx.currentTime + 0.24);
-    setTimeout(() => ctx.close(), 400);
-  } catch (e) { /* geluid is bijzaak */ }
-}
-
-const isVoorMij = (k, pid) => k.wie === pid || k.wie === "samen" || k.wie === "beiden";
-
-/* Jouw taken: alleen wat jij nog moet doen. */
-function MijnTaken({ ik, klussen, vinkAf, kleur }) {
-  const [bereik, zetBereik] = useState("vandaag");
-  const nu = new Date();
-  const vandaag = sleutelVan(nu);
-  const eindWeek = sleutelVan(plusDagen(maandagVan(nu), 6));
-
-  const mijn = klussen.filter((k) =>
-    (k.status ?? "actief") === "actief" && isVoorMij(k, ik.pid) && staatOpen(k, nu) &&
-    !(k.wie === "beiden" && (k.vinkjes || {})[ik.pid]) // al door jou afgevinkt
-  );
-
-  const lijst = mijn.filter((k) => {
-    const v = vervaldatumVan(k, nu);
-    if (bereik === "vandaag") return k.ritme === "dag" || v === vandaag;
-    return k.ritme === "dag" || k.ritme === "weekvrij" || (v && v >= sleutelVan(maandagVan(nu)) && v <= eindWeek);
-  });
-
-  const teVerdienen = lijst.reduce((s, k) => s + (k.punten ?? 1), 0);
-  const label = (k) => {
-    if (k.ritme === "dag") return "vandaag";
-    if (k.ritme === "weekvrij") return "deze week";
-    const v = vervaldatumVan(k, nu);
-    if (!v) return "";
-    const d = new Date(v + "T12:00:00");
-    return v === vandaag ? "vandaag" : `${DAGEN[(d.getDay() + 6) % 7].slice(0, 2)} ${d.getDate()}`;
-  };
-
-  return (
-    <Kaart>
-      <Kop extra={
-        <div className="flex gap-1">
-          {[{ v: "vandaag", l: "vandaag" }, { v: "week", l: "deze week" }].map((o) => (
-            <button key={o.v} onClick={() => zetBereik(o.v)} className="rounded-full px-2 py-1 text-xs"
-              style={{ background: bereik === o.v ? INK : PAPIER, color: bereik === o.v ? "#fff" : ZACHT, fontFamily: MONO }}>{o.l}</button>
-          ))}
-        </div>
-      }>
-        jouw taken
-      </Kop>
-
-      {lijst.length === 0 ? <Leeg>Niets meer open {bereik === "vandaag" ? "vandaag" : "deze week"}.</Leeg> : (
-        <>
-          <p className="mb-3 text-xs" style={{ color: ZACHT }}>
-            {lijst.length} open · {teVerdienen} punten te pakken
-          </p>
-          <ul className="space-y-2">
-            {lijst.map((k) => (
-              <li key={k.id} className="flex items-center gap-3">
-                <button onClick={() => vinkAf(k.id)} className="h-6 w-6 shrink-0 rounded-md"
-                  style={{ border: `1.5px solid ${k.wie === "beiden" ? GEEL : k.wie === "samen" ? SAMEN : kleur}` }}
-                  aria-label={`${k.titel} afvinken`} />
-                <span className="flex-1 text-sm" style={{ color: INK }}>{k.titel}</span>
-                {k.wie === "beiden" && <span className="text-xs" style={{ color: GEEL, fontFamily: MONO }}>gezamenlijk</span>}
-                <span className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>{label(k)}</span>
-                <span className="text-xs" style={{ color: INK, fontFamily: MONO, fontWeight: 700 }}>{k.punten ?? 1}p</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </Kaart>
-  );
-}
-
-/* Wat er is afgerond, met de mogelijkheid een vergissing terug te draaien. */
-function Afgerond({ klussen, personen, vinkAf }) {
-  const [bereik, zetBereik] = useState("vandaag");
-  const nu = new Date();
-  const vandaag = sleutelVan(nu);
-  const weekStart = sleutelVan(maandagVan(nu));
-
-  const gedaan = [];
-  klussen.forEach((k) => (k.geschiedenis || []).forEach((g, n) => {
-    const past = bereik === "vandaag" ? g.datum === vandaag : g.datum >= weekStart && g.datum <= vandaag;
-    if (past) gedaan.push({ sleutel: k.id + "-" + n, klus: k, door: g.door, datum: g.datum, punten: g.punten ?? 1 });
-  }));
-  gedaan.sort((a, b) => b.datum.localeCompare(a.datum));
-
-  // Dubbele regels van een gezamenlijke klus tonen we als één regel.
-  const uniek = [];
-  gedaan.forEach((g) => {
-    if (g.klus.wie === "beiden" && uniek.some((u) => u.klus.id === g.klus.id && u.datum === g.datum)) return;
-    uniek.push(g);
-  });
-
-  const herstel = (g) => {
-    if (!confirm(`"${g.klus.titel}" terugzetten bij de openstaande klussen?`)) return;
-    vinkAf(g.klus.id);
-  };
-
-  return (
-    <Kaart>
-      <Kop extra={
-        <div className="flex gap-1">
-          {[{ v: "vandaag", l: "vandaag" }, { v: "week", l: "deze week" }].map((o) => (
-            <button key={o.v} onClick={() => zetBereik(o.v)} className="rounded-full px-2 py-1 text-xs"
-              style={{ background: bereik === o.v ? INK : PAPIER, color: bereik === o.v ? "#fff" : ZACHT, fontFamily: MONO }}>{o.l}</button>
-          ))}
-        </div>
-      }>
-        afgerond
-      </Kop>
-
-      {uniek.length === 0 ? <Leeg>Nog niets afgevinkt {bereik === "vandaag" ? "vandaag" : "deze week"}.</Leeg> : (
-        <ul className="space-y-2">
-          {uniek.map((g) => {
-            const i = personen.findIndex((p) => p.pid === g.door);
-            const d = new Date(g.datum + "T12:00:00");
-            return (
-              <li key={g.sleutel} className="flex items-center gap-3">
-                <Avatar persoon={personen[i]} kleur={KLEUREN[i] || ZACHT} maat={20} rand={LIJN} />
-                <span className="flex-1 text-sm" style={{ color: ZACHT, textDecoration: "line-through" }}>{g.klus.titel}</span>
-                {bereik === "week" && (
-                  <span className="text-xs" style={{ color: LIJN, fontFamily: MONO }}>
-                    {DAGEN[(d.getDay() + 6) % 7].slice(0, 2)}
-                  </span>
-                )}
-                <span className="text-xs" style={{ color: KLEUREN[i] || ZACHT, fontFamily: MONO }}>
-                  {g.klus.wie === "beiden" ? "samen" : personen[i]?.naam || "?"}
-                </span>
-                <span className="text-xs" style={{ color: LIJN, fontFamily: MONO, fontWeight: 700 }}>{g.punten}p</span>
-                <button onClick={() => herstel(g)} style={{ color: ZACHT }} aria-label="Terugzetten">
-                  <RotateCcw size={14} />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </Kaart>
-  );
-}
-
-/* ---------- maandronde ---------- */
-function Maandprijs({ personen, klussen, ik, rondes, zetRondes }) {
-  const nu = new Date();
-  const mk = maandSleutel(nu);
-  const vorigeDatum = new Date(nu.getFullYear(), nu.getMonth() - 1, 1);
-  const vk = maandSleutel(vorigeDatum);
-  const ronde = rondes[mk] || { voorstel: null, akkoord: [] };
-  const [tekst, zetTekst] = useState("");
-
-  const akkoord = ronde.akkoord || [];
-  const ander = personen.find((p) => p.pid !== ik.pid);
-  const beide = ronde.voorstel && personen.length === 2 && personen.every((p) => akkoord.includes(p.pid));
-  const ikAkkoord = akkoord.includes(ik.pid);
-
-  const scores = personen.map((p) => puntenVan(klussen, p.pid, (d) => d.startsWith(mk)));
-  const hoogste = Math.max(1, ...scores);
-  const laatsteDag = new Date(nu.getFullYear(), nu.getMonth() + 1, 0).getDate();
-  const resterend = laatsteDag - nu.getDate();
-  const gelijk = scores[0] === scores[1];
-  const achterstand = personen.length === 2 ? Math.abs(scores[0] - scores[1]) : 0;
-  const verliestNu = personen.length === 2 && !gelijk ? personen[scores[0] < scores[1] ? 0 : 1] : null;
-
-  const stelVoor = () => {
-    if (!tekst.trim()) return;
-    zetRondes({ ...rondes, [mk]: { voorstel: { tekst: tekst.trim(), door: ik.pid }, akkoord: [ik.pid] } });
-    zetTekst("");
-  };
-  const gaAkkoord = () => zetRondes({ ...rondes, [mk]: { ...ronde, akkoord: [...akkoord, ik.pid] } });
-  const opnieuw = () => zetRondes({ ...rondes, [mk]: { voorstel: null, akkoord: [] } });
-
-  const vRonde = rondes[vk];
-  const vScores = personen.map((p) => puntenVan(klussen, p.pid, (d) => d.startsWith(vk)));
-  const vVerliezer = vRonde?.voorstel && personen.length === 2 && vScores[0] !== vScores[1]
-    ? personen[vScores[0] < vScores[1] ? 0 : 1] : null;
-
-  return (
-    <Kaart style={{ borderColor: GEEL, borderWidth: 2 }}>
-      <Kop extra={<span className="text-xs" style={{ fontFamily: MONO, color: GEEL }}>nog {resterend} dagen</span>}>
-        de inzet · {MAANDEN[nu.getMonth()]}
-      </Kop>
-
-      {/* de gezamenlijke inzet */}
-      {!ronde.voorstel && (
-        <div>
-          <p className="mb-2 text-sm" style={{ color: ZACHT }}>
-            Waar spelen jullie deze maand om? Stel iets voor, {ander ? ander.naam : "de ander"} gaat akkoord.
-          </p>
-          <div className="flex gap-2">
-            <Invoer waarde={tekst} zet={zetTekst} plaats="Bijvoorbeeld: date night betalen" opEnter={stelVoor} />
-            <button onClick={stelVoor} className="shrink-0 rounded-xl px-3 text-sm font-semibold" style={{ background: GEEL, color: INK }}>
-              Voorstellen
-            </button>
-          </div>
-        </div>
-      )}
-
-      {ronde.voorstel && (
-        <div className="rounded-xl p-3" style={{ background: beide ? GEEL : PAPIER }}>
-          <p className="text-xs uppercase tracking-widest" style={{ fontFamily: MONO, color: beide ? INK : ZACHT }}>
-            {beide ? "afgesproken" : "voorstel"}
-          </p>
-          <p className="mt-1 text-xl leading-snug" style={{ fontFamily: DISPLAY, fontWeight: 800, color: INK }}>
-            {ronde.voorstel.tekst}
-          </p>
-          <p className="mt-1 text-xs" style={{ color: beide ? INK : ZACHT }}>
-            Wie deze maand de minste punten heeft, doet dit.
-          </p>
-
-          {!beide && !ikAkkoord && (
-            <div className="mt-3 flex gap-2">
-              <Knop onClick={gaAkkoord} kleur={INK} klein>Akkoord</Knop>
-              <Knop onClick={opnieuw} kleur={ZACHT} vol={false} klein>Ander voorstel</Knop>
-            </div>
-          )}
-          {!beide && ikAkkoord && (
-            <p className="mt-2 text-xs" style={{ color: ZACHT, fontFamily: MONO }}>
-              wacht op akkoord van {ander ? ander.naam : "de ander"}
-            </p>
-          )}
-          {beide && (
-            <button onClick={opnieuw} className="mt-2 text-xs underline" style={{ color: INK }}>
-              inzet wijzigen
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* de stand */}
-      <div className="mt-4 space-y-3">
-        {personen.map((p, i) => (
-          <div key={p.pid}>
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm font-semibold" style={{ color: KLEUREN[i] }}>
-                {p.naam}{verliestNu?.pid === p.pid && ronde.voorstel ? " · staat achter" : ""}
-              </span>
-              <span className="text-xl" style={{ fontFamily: MONO, fontWeight: 700, color: INK }}>{scores[i]}</span>
-            </div>
-            <div className="mt-1 h-2 w-full overflow-hidden rounded-full" style={{ background: PAPIER }}>
-              <div style={{ width: `${(scores[i] / hoogste) * 100}%`, height: "100%", background: KLEUREN[i] }} />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {personen.length === 2 && (
-        <p className="mt-3 text-xs" style={{ color: ZACHT }}>
-          {gelijk ? "Gelijkspel. Bij gelijk aan het einde vervalt de inzet." : `${achterstand} punten verschil.`}
-        </p>
-      )}
-
-      {vVerliezer && (
-        <div className="mt-3 rounded-xl px-3 py-2" style={{ background: PAPIER }}>
-          <p className="text-xs" style={{ fontFamily: MONO, color: ZACHT }}>{MAANDEN[vorigeDatum.getMonth()]}</p>
-          <p className="text-sm" style={{ color: INK }}>
-            <strong>{vVerliezer.naam}</strong> verloor en doet: {vRonde.voorstel.tekst}
-          </p>
-        </div>
-      )}
-    </Kaart>
-  );
-}
-
-/* ---------- scherm: vandaag ---------- */
-function Vandaag({ ik, personen, klussen, vinkAf, boodschappen, wensen, prive, zetPrive, gaNaar, rondes, zetRondes }) {
-  const nu = new Date();
-  const [nieuw, zetNieuw] = useState("");
-  const teKopen = boodschappen.filter((b) => !b.af).length;
-  const wensTotaal = wensen.filter((w) => !w.gekocht).reduce((s, w) => s + (Number(w.prijs) || 0), 0);
-  const mijnKleur = KLEUREN[personen.findIndex((p) => p.pid === ik.pid)] || INK;
-
-  const voegPriveToe = () => {
-    if (!nieuw.trim()) return;
-    zetPrive([...prive, { id: id(), tekst: nieuw.trim(), af: false }]);
-    zetNieuw("");
-  };
-
-  return (
-    <div className="space-y-4">
-      <Maandprijs personen={personen} klussen={klussen} ik={ik} rondes={rondes} zetRondes={zetRondes} />
-      <Weegschaal personen={personen} klussen={klussen} />
-
-      <MijnTaken ik={ik} klussen={klussen} vinkAf={vinkAf} kleur={mijnKleur} />
-
-      <Afgerond klussen={klussen} personen={personen} vinkAf={vinkAf} />
-
-      <div className="grid grid-cols-2 gap-3">
-        <button onClick={() => gaNaar("boodschappen")} className="rounded-2xl p-4 text-left" style={{ background: KAART, border: `1px solid ${LIJN}` }}>
-          <p className="text-3xl" style={{ fontFamily: MONO, fontWeight: 700, color: INK }}>{teKopen}</p>
-          <p className="text-xs" style={{ color: ZACHT }}>op de boodschappenlijst</p>
-        </button>
-        <button onClick={() => gaNaar("wensen")} className="rounded-2xl p-4 text-left" style={{ background: KAART, border: `1px solid ${LIJN}` }}>
-          <p className="text-3xl" style={{ fontFamily: MONO, fontWeight: 700, color: INK }}>€{Math.round(wensTotaal)}</p>
-          <p className="text-xs" style={{ color: ZACHT }}>aan wensen voor het huis</p>
-        </button>
-      </div>
-
-      <Kaart style={{ background: INK }}>
-        <Kop>alleen voor jou</Kop>
-        <p className="-mt-2 mb-3 text-xs" style={{ color: "#9FB0A8" }}>Deze lijst ziet alleen jij.</p>
-        <div className="flex gap-2">
-          <Invoer waarde={nieuw} zet={zetNieuw} plaats="Eigen taak of notitie" opEnter={voegPriveToe}
-            style={{ background: "#22332C", border: "1px solid #33463D", color: "#fff" }} />
-          <button onClick={voegPriveToe} className="shrink-0 rounded-xl px-3" style={{ background: GEEL, color: INK }}>
-            <Plus size={18} />
-          </button>
-        </div>
-        <ul className="mt-3 space-y-2">
-          {prive.filter((p) => !p.af).map((p) => (
-            <li key={p.id} className="flex items-center gap-3">
-              <button onClick={() => zetPrive(prive.filter((x) => x.id !== p.id))}
-                className="h-6 w-6 shrink-0 rounded-md" style={{ border: "1.5px solid #4E6459" }}
-                aria-label="Afronden" />
-              <span className="text-sm text-white">{p.tekst}</span>
-            </li>
-          ))}
-        </ul>
-      </Kaart>
-    </div>
-  );
-}
-
-/* ---------- scherm: boodschappen ---------- */
-const CATS = ["vers", "voorraad", "huis", "anders"];
-function Boodschappen({ lijst, zetLijst, vast, zetVast, ik, personen }) {
-  const [tekst, zetTekst] = useState("");
-  const [cat, zetCat] = useState("vers");
-  const open = lijst.filter((b) => !b.af);
-  const af = lijst.filter((b) => b.af);
-  const ander = personen.find((p) => p.pid !== ik.pid);
-
-  const voegToe = () => {
-    if (!tekst.trim()) return;
-    zetLijst([...lijst, { id: id(), tekst: tekst.trim(), cat, af: false, door: ik.pid }]);
-    zetTekst("");
-  };
-
-  const staatVast = (naam) => vast.some((v) => v.tekst.toLowerCase() === naam.toLowerCase());
-
-  // Toevoegen aan de vaste lijst kan alleen hier. Verwijderen kan alleen bij de vaste lijst zelf,
-  // zodat afvinken of wissen van de boodschappenlijst er nooit iets uithaalt.
-  const zetOpVast = (b) => {
-    if (staatVast(b.tekst)) return;
-    zetVast([...vast, { id: id(), tekst: b.tekst, cat: b.cat, door: ik.pid }]);
-  };
-  const haalVanVast = (v) => {
-    if (!confirm(`"${v.tekst}" definitief van de vaste bestelling halen?`)) return;
-    zetVast(vast.filter((x) => x.id !== v.id));
-  };
-  const opLijst = (v) => {
-    if (lijst.some((b) => !b.af && b.tekst.toLowerCase() === v.tekst.toLowerCase())) return;
-    zetLijst([...lijst, { id: id(), tekst: v.tekst, cat: v.cat || "anders", af: false, door: ik.pid }]);
-  };
-  const allesOpLijst = () => {
-    const nieuwe = vast
-      .filter((v) => !lijst.some((b) => !b.af && b.tekst.toLowerCase() === v.tekst.toLowerCase()))
-      .map((v) => ({ id: id(), tekst: v.tekst, cat: v.cat || "anders", af: false, door: ik.pid }));
-    if (nieuwe.length) zetLijst([...lijst, ...nieuwe]);
-  };
-
-  return (
-    <div className="space-y-4">
-      <Kaart>
-        <div className="flex gap-2">
-          <Invoer waarde={tekst} zet={zetTekst} plaats="Wat is er nodig?" opEnter={voegToe} />
-          <button onClick={voegToe} className="shrink-0 rounded-xl px-3" style={{ background: INK, color: "#fff" }}><Plus size={18} /></button>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {CATS.map((c) => (
-            <button key={c} onClick={() => zetCat(c)} className="rounded-full px-3 py-1 text-xs"
-              style={{ background: cat === c ? INK : PAPIER, color: cat === c ? "#fff" : ZACHT, fontFamily: MONO }}>{c}</button>
-          ))}
-        </div>
-      </Kaart>
-
-      {CATS.map((c) => {
-        const items = open.filter((b) => b.cat === c);
-        if (!items.length) return null;
-        return (
-          <Kaart key={c}>
-            <Kop>{c}</Kop>
-            <ul className="space-y-2">
-              {items.map((b) => {
-                const vastItem = staatVast(b.tekst);
-                return (
-                  <li key={b.id} className="flex items-center gap-3">
-                    <button onClick={() => zetLijst(lijst.map((x) => x.id === b.id ? { ...x, af: true } : x))}
-                      className="h-6 w-6 shrink-0 rounded-md" style={{ border: `1.5px solid ${LIJN}` }} aria-label={`${b.tekst} afvinken`} />
-                    <span className="flex-1 text-sm" style={{ color: INK }}>{b.tekst}</span>
-                    <button onClick={() => zetOpVast(b)} aria-label="Op de vaste bestelling zetten"
-                      title={vastItem ? "Staat op de vaste bestelling" : "Op de vaste bestelling zetten"}>
-                      <Repeat size={16} color={vastItem ? GEEL : LIJN} />
-                    </button>
-                    <button onClick={() => zetLijst(lijst.filter((x) => x.id !== b.id))} style={{ color: LIJN }}><X size={16} /></button>
-                  </li>
-                );
-              })}
-            </ul>
-          </Kaart>
-        );
-      })}
-
-      {open.length === 0 && <Kaart><Leeg>De lijst is leeg. Typ hierboven wat er nodig is.</Leeg></Kaart>}
-
-      {af.length > 0 && (
-        <Kaart>
-          <Kop extra={<button onClick={() => zetLijst(open)} className="text-xs" style={{ color: KLEUREN[1], fontFamily: MONO }}>wissen</button>}>
-            in de kar ({af.length})
-          </Kop>
-          <ul className="space-y-1">
-            {af.map((b) => (
-              <li key={b.id}>
-                <button onClick={() => zetLijst(lijst.map((x) => x.id === b.id ? { ...x, af: false } : x))}
-                  className="flex items-center gap-2 text-sm line-through" style={{ color: ZACHT }}>
-                  <Check size={14} /> {b.tekst}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Kaart>
-      )}
-
-      <Kaart style={{ borderColor: GEEL, borderWidth: 2 }}>
-        <Kop extra={vast.length > 0 ? <Knop onClick={allesOpLijst} kleur={INK} klein>Alles op de lijst</Knop> : null}>
-          vaste bestelling · {vast.length}
-        </Kop>
-        <p className="-mt-2 mb-3 text-xs" style={{ color: ZACHT }}>
-          Blijft permanent staan, ook na afvinken. {ander ? `${ander.naam} ziet dezelfde lijst.` : ""} Weghalen doe je met het kruisje hier.
-        </p>
-        {vast.length === 0 ? (
-          <Leeg>Tik op het rondje met pijltjes achter een boodschap om hem hier vast te zetten.</Leeg>
-        ) : (
-          <ul className="space-y-2">
-            {vast.map((v) => {
-              const staatAlOpLijst = lijst.some((b) => !b.af && b.tekst.toLowerCase() === v.tekst.toLowerCase());
-              const i = personen.findIndex((p) => p.pid === v.door);
-              return (
-                <li key={v.id} className="flex items-center gap-3">
-                  <button onClick={() => opLijst(v)} disabled={staatAlOpLijst} className="rounded-full px-2 py-1 text-xs"
-                    style={{ background: staatAlOpLijst ? PAPIER : GEEL, color: staatAlOpLijst ? ZACHT : INK, fontFamily: MONO }}>
-                    {staatAlOpLijst ? "staat erop" : "op lijst"}
-                  </button>
-                  <span className="flex-1 text-sm" style={{ color: INK }}>{v.tekst}</span>
-                  {i >= 0 && <Avatar persoon={personen[i]} kleur={KLEUREN[i]} maat={18} rand={LIJN} />}
-                  <button onClick={() => haalVanVast(v)} style={{ color: LIJN }} aria-label="Van de vaste bestelling halen">
-                    <X size={16} />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Kaart>
-    </div>
-  );
-}
-
-/* ---------- scherm: klussen ---------- */
-const WEEKDAGEN = ["ma", "di", "wo", "do", "vr", "za", "zo"];
-function ritmeTekst(k) {
-  if (k.ritme === "week") return `elke ${DAGEN[k.dag ?? 6]}`;
-  if (k.ritme === "weekvrij") return "vrij in de week";
-  if (k.ritme === "maand") return `de ${k.dag ?? 1}e van de maand`;
-  if (k.ritme === "eenmalig") return k.dag ? `op ${k.dag}` : "eenmalig";
-  return "elke dag";
-}
-
-function Klussen({ klussen, zetKlussen, personen, ik, vinkAf, meld, zetHuisgenoten }) {
-  const nu = new Date();
-  const [weergave, zetWeergave] = useState("open");
-  const [titel, zetTitel] = useState("");
-  const [wie, zetWie] = useState(ik.pid);
-  const [ritme, zetRitme] = useState("week");
-  const [punten, zetPunten] = useState(2);
-  const [tijd, zetTijd] = useState("19:00");
-  const [weekdag, zetWeekdag] = useState(6);
-  const [maanddag, zetMaanddag] = useState(1);
-  const [datum, zetDatum] = useState("");
-  const [nieuweSubs, zetNieuweSubs] = useState([]);
-  const [subInvoer, zetSubInvoer] = useState("");
-  const [filter, zetFilter] = useState("alles");
-  const [sortering, zetSortering] = useState("eerst");
-  const [uitgeklapt, zetUitgeklapt] = useState(null);
-  const [subTekst, zetSubTekst] = useState("");
-  const [nieuweNaam, zetNieuweNaam] = useState("");
-  const [toevoegen, zetToevoegen] = useState(false);
-  const [maandOffset, zetMaandOffset] = useState(0);
-  const [wieAf, zetWieAf] = useState("alles");
-
-  const ander = personen.find((p) => p.pid !== ik.pid);
-  const dagWaarde = ritme === "week" ? weekdag : ritme === "maand" ? maanddag : ritme === "eenmalig" ? datum : null;
-  const kleurVan = (w) => w === "beiden" ? GEEL : w === "samen" ? SAMEN : KLEUREN[personen.findIndex((p) => p.pid === w)] || ZACHT;
-  const naamVan = (w) => w === "beiden" ? "gezamenlijk" : w === "samen" ? "samen" : personen.find((p) => p.pid === w)?.naam || "?";
-  const persoonVan = (w) => personen.find((p) => p.pid === w);
-
-  const voegHuisgenootToe = () => {
-    if (!nieuweNaam.trim() || personen.length >= 2) return;
-    const nieuw = { pid: id(), naam: nieuweNaam.trim() };
-    zetHuisgenoten([...personen, nieuw]);
-    zetWie(nieuw.pid);
-    zetNieuweNaam("");
-    zetToevoegen(false);
-  };
-
-  const voegSubInvoerToe = () => {
-    if (!subInvoer.trim()) return;
-    zetNieuweSubs([...nieuweSubs, { id: id(), tekst: subInvoer.trim(), af: false }]);
-    zetSubInvoer("");
-  };
-
-  const voegToe = () => {
-    if (!titel.trim()) return;
-    const nieuw = {
-      id: id(), titel: titel.trim(), wie, ritme, punten, tijd, dag: dagWaarde,
-      subs: nieuweSubs, vinkjes: {},
-      status: ander ? "wacht" : "actief", door: ik.pid, laatst: null, geschiedenis: [],
-    };
-    zetKlussen([...klussen, nieuw]);
-    if (ander) {
-      const stappen = nieuweSubs.length ? ` · ${nieuweSubs.length} stappen` : "";
-      const bericht = wie === ander.pid
-        ? { titel: `${ik.naam} stelt een klus voor`, tekst: `${nieuw.titel} · ${punten} punten${stappen}. Accepteren of weigeren?` }
-        : wie === "samen" || wie === "beiden"
-          ? { titel: wie === "beiden" ? "Nieuwe gezamenlijke klus" : "Nieuwe klus voor samen", tekst: `${nieuw.titel} · ${punten} punten${stappen}. Ga je akkoord?` }
-          : { titel: "Punten goedkeuren", tekst: `${ik.naam} wil ${punten} punten voor: ${nieuw.titel}` };
-      meld(ander.pid, bericht.titel, bericht.tekst);
-    }
-    zetTitel(""); zetNieuweSubs([]);
-  };
-
-  const pas = (k, velden) => zetKlussen(klussen.map((x) => x.id === k.id ? { ...x, ...velden } : x));
-  const wijzigPunten = (k) => {
-    const i = PUNTOPTIES.indexOf(k.punten ?? 1);
-    pas(k, { punten: PUNTOPTIES[(i + 1) % PUNTOPTIES.length] });
-  };
-  const wissel = (k) => {
-    const volgorde = [...personen.map((p) => p.pid), "samen", "beiden"];
-    const i = volgorde.indexOf(k.wie);
-    pas(k, { wie: volgorde[(i + 1) % volgorde.length], vinkjes: {} });
-  };
-  const voegSubToe = (k) => {
-    if (!subTekst.trim()) return;
-    pas(k, { subs: [...(k.subs || []), { id: id(), tekst: subTekst.trim(), af: false }] });
-    zetSubTekst("");
-  };
-  const wisselSub = (k, sub) =>
-    pas(k, { subs: (k.subs || []).map((s) => s.id === sub.id ? { ...s, af: !s.af } : s) });
-
-  const accepteer = (k) => {
-    pas(k, { status: "actief" });
-    meld(k.door, "Klus geaccepteerd", `${ik.naam} ging akkoord: ${k.titel} · ${k.punten ?? 1} punten`);
-  };
-  const weiger = (k) => {
-    zetKlussen(klussen.filter((x) => x.id !== k.id));
-    meld(k.door, "Klus geweigerd", `${ik.naam} wees af: ${k.titel}`);
-  };
-
-  const teKeuren = klussen.filter((k) => k.status === "wacht");
-  const vanAnder = teKeuren.filter((k) => k.door !== ik.pid);
-  const vanMij = teKeuren.filter((k) => k.door === ik.pid);
-  const actief = klussen.filter((k) => (k.status ?? "actief") === "actief");
-  const zichtbaar = actief.filter((k) =>
-    filter === "alles" ? true : filter === "ik" ? isVoorMij(k, ik.pid) : (k.wie === ander?.pid || k.wie === "samen" || k.wie === "beiden"));
-  const open = zichtbaar.filter((k) => staatOpen(k, nu));
-
-  const gesorteerd = [...open].sort((a, b) => {
-    if (sortering === "punten") return (b.punten ?? 1) - (a.punten ?? 1);
-    if (sortering === "persoon") return String(a.wie).localeCompare(String(b.wie));
-    return (vervaldatumVan(a, nu) || "9999").localeCompare(vervaldatumVan(b, nu) || "9999");
-  });
-
-  /* afgeronde klussen van de gekozen maand */
-  const maandDatum = new Date(nu.getFullYear(), nu.getMonth() - maandOffset, 1);
-  const mSleutel = maandSleutel(maandDatum);
-  const afgerond = [];
-  klussen.forEach((k) => (k.geschiedenis || []).forEach((g, n) => {
-    if (String(g.datum).startsWith(mSleutel) && (wieAf === "alles" || g.door === wieAf)) {
-      afgerond.push({ sleutel: k.id + n, klus: k, datum: g.datum, door: g.door, punten: g.punten ?? 1 });
-    }
-  }));
-  afgerond.sort((a, b) => b.datum.localeCompare(a.datum));
-
-  const Vinkvak = ({ k, af, klein }) => {
-    const maat = klein ? "h-6 w-6" : "h-7 w-7";
-    const mijnVinkje = (k.vinkjes || {})[ik.pid];
-    return (
-      <button onClick={() => vinkAf(k.id)} className={`flex ${maat} shrink-0 items-center justify-center rounded-md`}
-        style={{
-          border: `1.5px solid ${af ? LIJN : kleurVan(k.wie)}`,
-          background: af ? LIJN : mijnVinkje ? kleurVan(k.wie) : "transparent",
-        }}
-        aria-label={`${k.titel} afvinken`}>
-        {(af || mijnVinkje) && <Check size={14} color="#fff" />}
-      </button>
-    );
-  };
-
-  const Regel = ({ k, af }) => {
-    const subs = k.subs || [];
-    const klaar = subs.filter((s) => s.af).length;
-    const uit = uitgeklapt === k.id;
-    const gezamenlijk = k.wie === "beiden";
-    const vinkjes = k.vinkjes || {};
-    const laatsteDoener = af ? (k.geschiedenis || [])[(k.geschiedenis || []).length - 1]?.door : null;
-
-    return (
-      <li className="py-2" style={gezamenlijk ? { borderLeft: `3px solid ${GEEL}`, paddingLeft: 8, borderRadius: 4 } : {}}>
-        <div className="flex items-center gap-3">
-          <div className="relative shrink-0">
-            <Vinkvak k={k} af={af} />
-            <span className="absolute -bottom-1 -left-1">
-              {gezamenlijk
-                ? <span className="flex h-4 w-4 items-center justify-center rounded-full" style={{ background: GEEL, color: INK, fontSize: 8, fontFamily: MONO, fontWeight: 700, border: "2px solid #fff" }}>2</span>
-                : k.wie === "samen"
-                  ? <span className="flex h-4 w-4 items-center justify-center rounded-full" style={{ background: SAMEN, color: "#fff", fontSize: 8, fontFamily: MONO, border: "2px solid #fff" }}>2</span>
-                  : <Avatar persoon={persoonVan(k.wie)} kleur={kleurVan(k.wie)} maat={16} />}
-            </span>
-          </div>
-
-          <button onClick={() => zetUitgeklapt(uit ? null : k.id)} className="flex-1 text-left">
-            <p className="text-sm" style={{ color: af ? ZACHT : INK, textDecoration: af ? "line-through" : "none" }}>{k.titel}</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>{ritmeTekst(k)}</span>
-              {k.tijd && k.ritme !== "weekvrij" && <span className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>{k.tijd}</span>}
-              {subs.length > 0 && (
-                <span className="text-xs" style={{ color: klaar === subs.length ? kleurVan(k.wie) : ZACHT, fontFamily: MONO }}>
-                  {klaar}/{subs.length} stappen
-                </span>
-              )}
-              {gezamenlijk && !af && (
-                <span className="text-xs" style={{ color: GEEL, fontFamily: MONO }}>
-                  {personen.filter((p) => vinkjes[p.pid]).length}/{personen.length} afgevinkt
-                </span>
-              )}
-              {af && laatsteDoener && (
-                <span className="text-xs" style={{ color: kleurVan(laatsteDoener), fontFamily: MONO }}>
-                  gedaan door {naamVan(laatsteDoener)}
-                </span>
-              )}
-            </div>
-          </button>
-
-          <button onClick={() => wijzigPunten(k)} className="shrink-0 rounded-full px-2 py-1 text-xs"
-            style={{ background: PAPIER, color: INK, fontFamily: MONO, fontWeight: 700 }} aria-label="Punten wijzigen">
-            {k.punten ?? 1}p
-          </button>
-          <button onClick={() => zetUitgeklapt(uit ? null : k.id)} style={{ color: ZACHT }} aria-label="Details">
-            <ChevronDown size={16} style={{ transform: uit ? "rotate(180deg)" : "none" }} />
-          </button>
-        </div>
-
-        {uit && (
-          <div className="ml-10 mt-2 space-y-2">
-            {subs.map((s) => (
-              <button key={s.id} onClick={() => wisselSub(k, s)} className="flex w-full items-center gap-2 text-left">
-                <span className="flex h-4 w-4 items-center justify-center rounded" style={{ border: `1.5px solid ${LIJN}`, background: s.af ? kleurVan(k.wie) : "transparent" }}>
-                  {s.af && <Check size={10} color="#fff" />}
-                </span>
-                <span className="text-sm" style={{ color: s.af ? ZACHT : INK, textDecoration: s.af ? "line-through" : "none" }}>{s.tekst}</span>
-              </button>
-            ))}
-            <div className="flex gap-2">
-              <Invoer waarde={subTekst} zet={zetSubTekst} plaats="Stap toevoegen" opEnter={() => voegSubToe(k)} />
-              <button onClick={() => voegSubToe(k)} className="shrink-0 rounded-xl px-3" style={{ background: PAPIER, color: INK }}><Plus size={16} /></button>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              {k.ritme === "week" && (
-                <select value={k.dag ?? 6} onChange={(e) => pas(k, { dag: Number(e.target.value) })}
-                  className="rounded-full px-2 py-1 text-xs" style={{ color: INK, fontFamily: MONO, background: PAPIER, border: `1px solid ${LIJN}` }}>
-                  {WEEKDAGEN.map((d, i) => <option key={d} value={i}>{d}</option>)}
-                </select>
-              )}
-              {k.ritme !== "weekvrij" && (
-                <input type="time" value={k.tijd || ""} onChange={(e) => pas(k, { tijd: e.target.value })}
-                  className="rounded-full px-2 py-1 text-xs" style={{ color: INK, fontFamily: MONO, background: PAPIER, border: `1px solid ${LIJN}` }}
-                  aria-label="Meldingstijd" />
-              )}
-              <button onClick={() => wissel(k)} className="flex items-center gap-1 rounded-full px-2 py-1 text-xs"
-                style={{ color: kleurVan(k.wie), border: `1px solid ${kleurVan(k.wie)}` }}>
-                {naamVan(k.wie)} <ArrowLeftRight size={11} />
-              </button>
-              <button onClick={() => zetKlussen(klussen.filter((x) => x.id !== k.id))} style={{ color: LIJN }}><Trash2 size={15} /></button>
-            </div>
-          </div>
-        )}
-      </li>
-    );
-  };
-
-  return (
-    <div className="space-y-4">
-      {vanAnder.length > 0 && (
-        <Kaart style={{ borderColor: SAMEN, borderWidth: 2 }}>
-          <Kop>ter goedkeuring · {vanAnder.length}</Kop>
-          <ul className="space-y-3">
-            {vanAnder.map((k) => (
-              <li key={k.id}>
-                <p className="text-sm font-semibold" style={{ color: INK }}>{k.titel}</p>
-                <p className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>
-                  {naamVan(k.door)} stelt voor · voor {naamVan(k.wie)} · {ritmeTekst(k)}
-                </p>
-                {(k.subs || []).length > 0 && (
-                  <ul className="mt-1 ml-3 list-disc text-xs" style={{ color: ZACHT }}>
-                    {k.subs.map((s) => <li key={s.id}>{s.tekst}</li>)}
-                  </ul>
-                )}
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <button onClick={() => wijzigPunten(k)} className="rounded-full px-3 py-1 text-xs"
-                    style={{ background: GEEL, color: INK, fontFamily: MONO, fontWeight: 700 }}>
-                    {k.punten ?? 1} punten · aanpassen
-                  </button>
-                  <Knop onClick={() => accepteer(k)} kleur={SAMEN} klein>Accepteren</Knop>
-                  <Knop onClick={() => weiger(k)} kleur={ZACHT} vol={false} klein>Weigeren</Knop>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Kaart>
-      )}
-
-      {vanMij.length > 0 && (
-        <Kaart>
-          <Kop>wacht op {ander ? ander.naam : "de ander"}</Kop>
-          <ul className="space-y-1">
-            {vanMij.map((k) => (
-              <li key={k.id} className="flex items-center justify-between">
-                <span className="text-sm" style={{ color: ZACHT }}>{k.titel}</span>
-                <button onClick={() => zetKlussen(klussen.filter((x) => x.id !== k.id))}
-                  className="text-xs" style={{ color: LIJN }}>intrekken</button>
-              </li>
-            ))}
-          </ul>
-        </Kaart>
-      )}
-
-      <div className="flex gap-2">
-        {[{ v: "open", l: "open" }, { v: "agenda", l: "weekagenda" }, { v: "afgerond", l: "afgerond" }].map((o) => (
-          <button key={o.v} onClick={() => zetWeergave(o.v)} className="rounded-full px-3 py-1 text-xs"
-            style={{ background: weergave === o.v ? INK : KAART, color: weergave === o.v ? "#fff" : ZACHT, fontFamily: MONO, border: `1px solid ${LIJN}` }}>{o.l}</button>
-        ))}
-      </div>
-
-      {weergave === "open" && (
-        <>
-          <Kaart>
-            <div className="flex gap-2">
-              <Invoer waarde={titel} zet={zetTitel} plaats="Nieuwe klus" opEnter={voegToe} />
-              <button onClick={voegToe} className="shrink-0 rounded-xl px-3" style={{ background: INK, color: "#fff" }}><Plus size={18} /></button>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[...personen.map((p) => ({ v: p.pid, l: p.naam })), { v: "samen", l: "samen" }, { v: "beiden", l: "gezamenlijk" }].map((o) => (
-                <button key={o.v} onClick={() => zetWie(o.v)} className="rounded-full px-3 py-1 text-xs"
-                  style={{ background: wie === o.v ? kleurVan(o.v) : PAPIER, color: wie === o.v ? (o.v === "beiden" ? INK : "#fff") : ZACHT, fontFamily: MONO, fontWeight: wie === o.v ? 700 : 400 }}>{o.l}</button>
-              ))}
-              {!ander && (
-                <button onClick={() => zetToevoegen(!toevoegen)} className="rounded-full px-3 py-1 text-xs"
-                  style={{ border: `1px dashed ${SAMEN}`, color: SAMEN, fontFamily: MONO }}>+ huisgenoot</button>
-              )}
-            </div>
-            {wie === "beiden" && (
-              <p className="mt-1 text-xs" style={{ color: GEEL }}>
-                Gezamenlijke klus: jullie moeten hem allebei afvinken, dan krijgen jullie allebei de punten.
-              </p>
-            )}
-
-            {toevoegen && !ander && (
-              <div className="mt-2">
-                <div className="flex gap-2">
-                  <Invoer waarde={nieuweNaam} zet={zetNieuweNaam} plaats="Naam van je huisgenoot" opEnter={voegHuisgenootToe} />
-                  <button onClick={voegHuisgenootToe} className="shrink-0 rounded-xl px-3 text-sm font-semibold"
-                    style={{ background: SAMEN, color: "#fff" }}>Toevoegen</button>
-                </div>
-              </div>
-            )}
-
-            <div className="mt-2 flex flex-wrap gap-2">
-              {Object.keys(RITMES).map((r) => (
-                <button key={r} onClick={() => zetRitme(r)} className="rounded-full px-3 py-1 text-xs"
-                  style={{ background: ritme === r ? INK : PAPIER, color: ritme === r ? "#fff" : ZACHT, fontFamily: MONO }}>{RITMES[r]}</button>
-              ))}
-            </div>
-
-            {ritme === "week" && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {WEEKDAGEN.map((d, i) => (
-                  <button key={d} onClick={() => zetWeekdag(i)} className="rounded-full px-3 py-1 text-xs"
-                    style={{ background: weekdag === i ? SAMEN : PAPIER, color: weekdag === i ? "#fff" : ZACHT, fontFamily: MONO }}>{d}</button>
-                ))}
-              </div>
-            )}
-            {ritme === "weekvrij" && (
-              <p className="mt-2 text-xs" style={{ color: ZACHT }}>
-                Staat de hele week open, geen vaste dag en geen dagelijkse herinnering.
-              </p>
-            )}
-            {ritme === "maand" && (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>dag van de maand</span>
-                <input type="number" min="1" max="28" value={maanddag} onChange={(e) => zetMaanddag(Number(e.target.value))}
-                  className="w-16 rounded-full px-3 py-1 text-xs" style={{ background: PAPIER, color: INK, fontFamily: MONO, border: `1px solid ${LIJN}` }} />
-              </div>
-            )}
-            {ritme === "eenmalig" && (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>datum</span>
-                <input type="date" value={datum} onChange={(e) => zetDatum(e.target.value)}
-                  className="rounded-full px-3 py-1 text-xs" style={{ background: PAPIER, color: INK, fontFamily: MONO, border: `1px solid ${LIJN}` }} />
-              </div>
-            )}
-
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>punten</span>
-              {PUNTOPTIES.map((p) => (
-                <button key={p} onClick={() => zetPunten(p)} className="rounded-full px-3 py-1 text-xs"
-                  style={{ background: punten === p ? GEEL : PAPIER, color: INK, fontFamily: MONO, fontWeight: 700 }}>{p}</button>
-              ))}
-            </div>
-
-            {ritme !== "weekvrij" && (
-              <div className="mt-2 flex items-center gap-2">
-                <Bell size={13} color={ZACHT} />
-                <span className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>melding om</span>
-                <input type="time" value={tijd} onChange={(e) => zetTijd(e.target.value)}
-                  className="rounded-full px-2 py-1 text-xs"
-                  style={{ background: PAPIER, color: INK, fontFamily: MONO, border: `1px solid ${LIJN}` }} />
-                <span className="text-xs" style={{ color: ZACHT }}>dag ervoor en op de dag zelf</span>
-              </div>
-            )}
-
-            <div className="mt-3">
-              <p className="mb-1 text-xs" style={{ color: ZACHT, fontFamily: MONO }}>stappen ({nieuweSubs.length})</p>
-              {nieuweSubs.map((s) => (
-                <div key={s.id} className="mb-1 flex items-center gap-2">
-                  <span className="flex-1 text-sm" style={{ color: INK }}>{s.tekst}</span>
-                  <button onClick={() => zetNieuweSubs(nieuweSubs.filter((x) => x.id !== s.id))} style={{ color: LIJN }}><X size={14} /></button>
-                </div>
-              ))}
-              <div className="flex gap-2">
-                <Invoer waarde={subInvoer} zet={zetSubInvoer} plaats="Stap, bijvoorbeeld ramen zemen" opEnter={voegSubInvoerToe} />
-                <button onClick={voegSubInvoerToe} className="shrink-0 rounded-xl px-3" style={{ background: PAPIER, color: INK }}><Plus size={16} /></button>
-              </div>
-            </div>
-
-            {ander && (
-              <p className="mt-3 text-xs" style={{ color: ZACHT }}>
-                Elke nieuwe klus gaat eerst naar {ander.naam} ter goedkeuring, inclusief de stappen.
-              </p>
-            )}
-          </Kaart>
-
-          <div className="flex flex-wrap gap-2">
-            {[{ v: "alles", l: "alles" }, { v: "ik", l: ik.naam }, { v: "ander", l: ander ? ander.naam : "ander" }].map((o) => (
-              <button key={o.v} onClick={() => zetFilter(o.v)} className="rounded-full px-3 py-1 text-xs"
-                style={{ background: filter === o.v ? INK : KAART, color: filter === o.v ? "#fff" : ZACHT, fontFamily: MONO, border: `1px solid ${LIJN}` }}>{o.l}</button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="py-1 text-xs" style={{ color: ZACHT, fontFamily: MONO }}>sorteer</span>
-            {[{ v: "eerst", l: "eerstvolgende" }, { v: "punten", l: "punten" }, { v: "persoon", l: "per persoon" }].map((o) => (
-              <button key={o.v} onClick={() => zetSortering(o.v)} className="rounded-full px-3 py-1 text-xs"
-                style={{ background: sortering === o.v ? SAMEN : KAART, color: sortering === o.v ? "#fff" : ZACHT, fontFamily: MONO, border: `1px solid ${LIJN}` }}>{o.l}</button>
-            ))}
-          </div>
-
-          <Kaart>
-            <Kop>open · {gesorteerd.length}</Kop>
-            {gesorteerd.length === 0 ? <Leeg>Niets open in deze weergave.</Leeg> : <ul>{gesorteerd.map((k) => <Regel key={k.id} k={k} />)}</ul>}
-          </Kaart>
-        </>
-      )}
-
-      {weergave === "agenda" && (
-        <>
-          {DAGEN.map((dagNaam, i) => {
-            const d = plusDagen(maandagVan(nu), i);
-            const sl = sleutelVan(d);
-            const vandaag = zelfdeDag(d, nu);
-            const opDeze = zichtbaar.filter((k) => vervaldatumVan(k, nu) === sl || (k.ritme === "dag" && staatOpen(k, nu) && vandaag));
-            return (
-              <Kaart key={sl} style={vandaag ? { border: `2px solid ${GEEL}` } : {}}>
-                <Kop>{dagNaam} {d.getDate()}</Kop>
-                {opDeze.length === 0 ? <Leeg>Vrij</Leeg> : (
-                  <ul>{opDeze.map((k) => <Regel key={k.id} k={k} af={!staatOpen(k, nu)} />)}</ul>
-                )}
-              </Kaart>
-            );
-          })}
-          <Kaart>
-            <Kop>vrij in de week</Kop>
-            {zichtbaar.filter((k) => k.ritme === "weekvrij").length === 0
-              ? <Leeg>Geen losse weekklussen.</Leeg>
-              : <ul>{zichtbaar.filter((k) => k.ritme === "weekvrij").map((k) => <Regel key={k.id} k={k} af={!staatOpen(k, nu)} />)}</ul>}
-          </Kaart>
-        </>
-      )}
-
-      {weergave === "afgerond" && (
-        <>
-          <div className="flex items-center justify-between">
-            <button onClick={() => zetMaandOffset(maandOffset + 1)} style={{ color: ZACHT }}><ChevronLeft size={20} /></button>
-            <p className="text-sm" style={{ fontFamily: MONO, color: ZACHT }}>
-              {maandOffset === 0 ? "deze maand" : MAANDEN[maandDatum.getMonth()]}
-            </p>
-            <button onClick={() => maandOffset > 0 && zetMaandOffset(maandOffset - 1)} style={{ color: maandOffset > 0 ? ZACHT : LIJN }}><ChevronRight size={20} /></button>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {[{ v: "alles", l: "alles" }, ...personen.map((p) => ({ v: p.pid, l: p.naam }))].map((o) => (
-              <button key={o.v} onClick={() => zetWieAf(o.v)} className="rounded-full px-3 py-1 text-xs"
-                style={{ background: wieAf === o.v ? INK : KAART, color: wieAf === o.v ? "#fff" : ZACHT, fontFamily: MONO, border: `1px solid ${LIJN}` }}>{o.l}</button>
-            ))}
-          </div>
-
-          <Kaart>
-            <Kop extra={<span className="text-xs" style={{ fontFamily: MONO, color: INK }}>
-              {afgerond.reduce((s, a) => s + a.punten, 0)} punten
-            </span>}>
-              afgerond · {afgerond.length}
-            </Kop>
-            {afgerond.length === 0 ? <Leeg>Nog niets afgerond in deze maand.</Leeg> : (
-              <ul className="space-y-1">
-                {afgerond.map((a) => {
-                  const i = personen.findIndex((p) => p.pid === a.door);
-                  const uit = uitgeklapt === a.sleutel;
-                  const d = new Date(a.datum + "T12:00:00");
-                  return (
-                    <li key={a.sleutel} className="py-1">
-                      <button onClick={() => zetUitgeklapt(uit ? null : a.sleutel)} className="flex w-full items-center gap-3 text-left">
-                        <Avatar persoon={personen[i]} kleur={KLEUREN[i] || ZACHT} maat={20} rand={LIJN} />
-                        <span className="flex-1 text-sm" style={{ color: INK }}>{a.klus.titel}</span>
-                        <span className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>
-                          {DAGEN[(d.getDay() + 6) % 7].slice(0, 2)} {d.getDate()}
-                        </span>
-                        <span className="text-xs" style={{ color: INK, fontFamily: MONO, fontWeight: 700 }}>{a.punten}p</span>
-                        <ChevronDown size={14} color={ZACHT} style={{ transform: uit ? "rotate(180deg)" : "none" }} />
-                      </button>
-                      {uit && (
-                        <div className="ml-8 mt-1 text-xs" style={{ color: ZACHT }}>
-                          <p>{ritmeTekst(a.klus)} · voor {naamVan(a.klus.wie)}</p>
-                          <p>gedaan door {personen[i]?.naam || "onbekend"} op {a.datum}</p>
-                          {(a.klus.subs || []).length > 0 && (
-                            <ul className="ml-3 list-disc">
-                              {a.klus.subs.map((s) => <li key={s.id}>{s.tekst}</li>)}
-                            </ul>
-                          )}
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Kaart>
-        </>
-      )}
-    </div>
-  );
-}
-
-/* ---------- scherm: wenslijst ---------- */
-function Deals({ deals, wensen }) {
-  const [open, zetOpen] = useState(true);
-  const items = (deals?.items || []).filter((d) => wensen.some((w) => w.id === d.wensId && !w.gekocht));
-  const st = deals?.status;
-  const tijd = st?.moment ? new Date(st.moment).toLocaleString("nl-NL", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : null;
-  return (
-    <Kaart>
-      <button onClick={() => zetOpen(!open)} className="flex w-full items-center justify-between text-left">
-        <span className="text-xs uppercase tracking-widest" style={{ fontFamily: MONO, color: ZACHT }}>
-          marktplaats deals · {items.length}
-        </span>
-        <ChevronDown size={16} color={ZACHT} style={{ transform: open ? "rotate(180deg)" : "none" }} />
-      </button>
-      {st && st.ok === false && (
-        <p className="mt-2 text-xs" style={{ color: "#B3402A" }}>De laatste zoekronde mislukte ({tijd}). Oude deals blijven staan.</p>
-      )}
-      {!deals && <p className="mt-2 text-xs" style={{ color: ZACHT }}>De bot heeft nog niet gezocht. Eerste ronde volgt automatisch.</p>}
-      {open && items.map((d) => (
-        <a key={d.id} href={d.url} target="_blank" rel="noopener noreferrer"
-          className="mt-3 flex items-center gap-3 rounded-xl p-2" style={{ background: PAPIER }}>
-          {d.foto ? <img src={d.foto.startsWith("//") ? "https:" + d.foto : d.foto} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" /> : <div className="h-14 w-14 shrink-0 rounded-lg" style={{ background: LIJN }} />}
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm" style={{ color: INK, fontWeight: 600 }}>{d.titel}</p>
-            <p className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>
-              €{d.prijs} <span style={{ textDecoration: "line-through" }}>€{d.richtprijs}</span> · {d.plaats}{d.afstandKm != null ? ` ${d.afstandKm} km` : ""}
-            </p>
-            <p className="truncate text-xs" style={{ color: ZACHT }}>voor: {d.wens}{d.nieuw ? " · nieuw" : ""}</p>
-          </div>
-          <ExternalLink size={16} color={ZACHT} />
-        </a>
-      ))}
-      {open && deals && items.length === 0 && st?.ok !== false && (
-        <p className="mt-2 text-xs" style={{ color: ZACHT }}>Vandaag niets onder de richtprijs gevonden{tijd ? ` (gezocht ${tijd})` : ""}.</p>
-      )}
-    </Kaart>
-  );
-}
-
-function Wensen({ wensen, zetWensen, ik, personen, deals }) {
-  const [tekst, zetTekst] = useState("");
-  const [ruimte, zetRuimte] = useState("");
-  const [prijs, zetPrijs] = useState("");
-
-  const voegToe = () => {
-    if (!tekst.trim()) return;
-    zetWensen([...wensen, { id: id(), tekst: tekst.trim(), ruimte: ruimte.trim(), prijs: Number(prijs) || 0, akkoord: [ik.pid], gekocht: false }]);
-    zetTekst(""); zetRuimte(""); zetPrijs("");
-  };
-  const stem = (w) => zetWensen(wensen.map((x) => x.id === w.id
-    ? { ...x, akkoord: x.akkoord.includes(ik.pid) ? x.akkoord.filter((a) => a !== ik.pid) : [...x.akkoord, ik.pid] }
-    : x));
-
-  const open = wensen.filter((w) => !w.gekocht);
-  const totaal = open.reduce((s, w) => s + (Number(w.prijs) || 0), 0);
-  const eens = open.filter((w) => w.akkoord.length >= personen.length);
-
-  return (
-    <div className="space-y-4">
-      <Kaart style={{ background: INK }}>
-        <p className="text-xs uppercase tracking-widest" style={{ fontFamily: MONO, color: "#9FB0A8" }}>wenslijst voor het huis</p>
-        <p className="mt-1 text-4xl" style={{ fontFamily: MONO, fontWeight: 700, color: "#fff" }}>€{totaal.toLocaleString("nl-NL")}</p>
-        <p className="text-xs" style={{ color: "#9FB0A8" }}>{eens.length} van {open.length} waar jullie het allebei over eens zijn</p>
-      </Kaart>
-
-      <Deals deals={deals} wensen={wensen} />
-
-      <Kaart>
-        <Invoer waarde={tekst} zet={zetTekst} plaats="Wat willen jullie kopen?" opEnter={voegToe} />
-        <div className="mt-2 flex gap-2">
-          <Invoer waarde={ruimte} zet={zetRuimte} plaats="Ruimte" />
-          <Invoer waarde={prijs} zet={zetPrijs} plaats="€" style={{ width: 90 }} />
-          <button onClick={voegToe} className="shrink-0 rounded-xl px-3" style={{ background: INK, color: "#fff" }}><Plus size={18} /></button>
-        </div>
-      </Kaart>
-
-      {open.length === 0 ? <Kaart><Leeg>Nog geen wensen. Voeg toe wat het huis nog mist.</Leeg></Kaart> : open.map((w) => {
-        const beide = w.akkoord.length >= personen.length;
-        return (
-          <Kaart key={w.id} style={beide ? { border: `1.5px solid ${SAMEN}` } : {}}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1">
-                <p className="text-lg leading-snug" style={{ fontFamily: DISPLAY, fontWeight: 700, color: INK }}>{w.tekst}</p>
-                <p className="text-xs" style={{ color: ZACHT, fontFamily: MONO }}>
-                  {w.ruimte || "hele huis"} {w.prijs ? `· €${w.prijs}` : ""}
-                </p>
-                <div className="mt-2 flex gap-2">
-                  {personen.map((p, i) => (
-                    <span key={p.pid} className="rounded-full px-2 py-1 text-xs" style={{
-                      fontFamily: MONO,
-                      background: w.akkoord.includes(p.pid) ? KLEUREN[i] : PAPIER,
-                      color: w.akkoord.includes(p.pid) ? "#fff" : ZACHT,
-                    }}>{p.naam}</span>
-                  ))}
-                </div>
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <button onClick={() => stem(w)} aria-label="Stem">
-                  <Heart size={20} fill={w.akkoord.includes(ik.pid) ? SAMEN : "none"} color={w.akkoord.includes(ik.pid) ? SAMEN : LIJN} />
-                </button>
-                <button onClick={() => zetWensen(wensen.map((x) => x.id === w.id ? { ...x, gekocht: true } : x))}
-                  className="rounded-full px-2 py-1 text-xs" style={{ border: `1px solid ${LIJN}`, color: ZACHT, fontFamily: MONO }}>gekocht</button>
-              </div>
-            </div>
-          </Kaart>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ---------- app ---------- */
 export default function Huishoudapp({ gebruiker }) {
   const [personen, zetPersonen] = useState([]);
   const [ikId, zetIkId] = useState(null);
   const [boodschappen, zetBoodschappenS] = useState([]);
   const [klussen, zetKlussenS] = useState([]);
-  const [menu, zetMenuS] = useState({});
   const [wensen, zetWensenS] = useState([]);
   const [prive, zetPriveS] = useState([]);
   const [rondes, zetRondesS] = useState({});
@@ -1345,35 +65,40 @@ export default function Huishoudapp({ gebruiker }) {
   const [deals, zetDeals] = useState(null);
   const [chat, zetChatS] = useState([]);
   const [vast, zetVastS] = useState([]);
-  const [chatOpen, zetChatOpen] = useState(false);
-  const [foto, zetFoto] = useState(null);
-  const [tab, zetTab] = useState("vandaag");
+  const [tab, zetTabS] = useState(() => lokaal("tab") || "thuis");
+  const [seg, zetSegS] = useState(() => lokaal("segment") || "klussen");
   const [laden, zetLaden] = useState(true);
   const [geladen, zetGeladen] = useState(false);
   const [laadFout, zetLaadFout] = useState(null);
   const [meldingen, zetMeldingen] = useState(meldingStand());
   const [naam, zetNaam] = useState("");
+  const [foto, zetFoto] = useState(null);
+  const [klusSheet, zetKlusSheet] = useState(null);   // null, of { klus } voor bewerken of een sjabloon
+  const [snel, zetSnel] = useState(false);
+  const [inzetMaand, zetInzetMaand] = useState(null);
+  const [profiel, zetProfiel] = useState(false);
+  const [pop, toonPop] = useOpstijg();
   const laatsteSync = useRef(0);
+  const scroller = useRef(null);
 
   const haalOp = useCallback(async () => {
     try {
-    const [hg, bo, kl, me, we, pr, ro, ui, ch, va, dl] = await Promise.all([
-      laad("huisgenoten", true), laad("boodschappen", true),
-      laad("klussen", true), laad("weekmenu", true), laad("wensen", true), laad("prive", false),
-      laad("maandrondes", true), laad("uitgaand", true), laad("chat", true), laad("vastelijst", true), laad("deals", true),
-    ]);
-    zetRondesS(ro || {});
-    zetUitgaandS(ui || []);
-    zetChatS(ch || []);
-    zetPersonen(hg || []);
-    zetIkId((hg || []).find((p) => p.gebruiker === gebruiker.id)?.pid || null);
-    zetBoodschappenS(bo || []);
-    zetKlussenS(kl || []);
-    zetMenuS(me || {});
-    zetWensenS(we || []);
-    zetPriveS(pr || []);
-    zetVastS(va || []);
-    zetDeals(dl || null);
+      const [hg, bo, kl, we, pr, ro, ui, ch, va, dl] = await Promise.all([
+        laad("huisgenoten", true), laad("boodschappen", true), laad("klussen", true), laad("wensen", true),
+        laad("prive", false), laad("maandrondes", true), laad("uitgaand", true), laad("chat", true),
+        laad("vastelijst", true), laad("deals", true),
+      ]);
+      zetPersonen(hg || []);
+      zetIkId((hg || []).find((p) => p.gebruiker === gebruiker.id)?.pid || null);
+      zetBoodschappenS(bo || []);
+      zetKlussenS(kl || []);
+      zetWensenS(we || []);
+      zetPriveS(pr || []);
+      zetRondesS(ro || {});
+      zetUitgaandS(ui || []);
+      zetChatS(ch || []);
+      zetVastS(va || []);
+      zetDeals(dl || null);
       laatsteSync.current = Date.now();
       zetGeladen(true);
       zetLaadFout(null);
@@ -1398,7 +123,6 @@ export default function Huishoudapp({ gebruiker }) {
   };
   const zetBoodschappen = maak("boodschappen", zetBoodschappenS, true);
   const zetKlussen = maak("klussen", zetKlussenS, true);
-  const zetMenu = maak("weekmenu", zetMenuS, true);
   const zetWensen = maak("wensen", zetWensenS, true);
   const zetPrive = maak("prive", zetPriveS, false);
   const zetRondes = maak("maandrondes", zetRondesS, true);
@@ -1407,6 +131,23 @@ export default function Huishoudapp({ gebruiker }) {
   const zetVast = maak("vastelijst", zetVastS, true);
   const zetHuisgenoten = maak("huisgenoten", zetPersonen, true);
 
+  // Leest de huisgenoten vers uit de database, past ze aan en slaat ze op.
+  const wijzigHuisgenoten = async (pasAan) => {
+    const vers = (await laad("huisgenoten", true)) || [];
+    const nieuw = pasAan(vers);
+    if (!nieuw) return null;
+    await bewaar("huisgenoten", nieuw, true);
+    zetPersonen(nieuw);
+    return nieuw;
+  };
+
+  const zetTab = (t, s) => {
+    zetTabS(t); lokaal("tab", t);
+    if (s) { zetSegS(s); lokaal("segment", s); }
+    scroller.current?.scrollTo({ top: 0 });
+  };
+  const zetSeg = (s) => { zetSegS(s); lokaal("segment", s); };
+
   // Zet een bericht klaar. De meldingsfunctie pikt het op en stuurt de push.
   const meld = (aan, titel, tekst) => {
     const vers = (uitgaand || []).filter((b) => Date.now() - b.moment < 7 * 864e5);
@@ -1414,9 +155,11 @@ export default function Huishoudapp({ gebruiker }) {
   };
 
   const ik = personen.find((p) => p.pid === ikId);
-  const bewaarFoto = (afbeelding) =>
-    zetHuisgenoten(personen.map((p) => p.pid === ikId ? { ...p, foto: afbeelding } : p));
+  const ander = personen.find((p) => p.pid !== ikId);
+  const bewaarFoto = (afbeelding) => zetHuisgenoten(personen.map((p) => (p.pid === ikId ? { ...p, foto: afbeelding } : p)));
+  const meldingenAan = async () => { if (ik) zetMeldingen(await meldingenAanzetten(ik.pid)); };
 
+  /* ---------- klussen ---------- */
   const vinkAf = (klusId) => {
     const vandaag = sleutelVan(new Date());
     const klus = klussen.find((k) => k.id === klusId);
@@ -1424,25 +167,23 @@ export default function Huishoudapp({ gebruiker }) {
     const open = staatOpen(klus, new Date());
     const waarde = klus.punten ?? 1;
 
-    // Gezamenlijke klus: allebei moeten aanvinken voordat hij afgerond is.
+    // Samen (beiden): allebei moeten afvinken voordat hij klaar is.
     if (klus.wie === "beiden" && open) {
       const vinkjes = { ...(klus.vinkjes || {}) };
       if (vinkjes[ikId]) {
         delete vinkjes[ikId];
-        zetKlussen(klussen.map((k) => k.id === klusId ? { ...k, vinkjes } : k));
+        zetKlussen(klussen.map((k) => (k.id === klusId ? { ...k, vinkjes } : k)));
         return;
       }
       vinkjes[ikId] = vandaag;
       const compleet = personen.length > 0 && personen.every((p) => vinkjes[p.pid]);
       if (!compleet) {
-        zetKlussen(klussen.map((k) => k.id === klusId ? { ...k, vinkjes } : k));
+        zetKlussen(klussen.map((k) => (k.id === klusId ? { ...k, vinkjes } : k)));
         piep();
         return;
       }
       const erbij = personen.map((p) => ({ door: p.pid, datum: vandaag, punten: waarde }));
-      zetKlussen(klussen.map((k) => k.id === klusId
-        ? { ...k, vinkjes: {}, laatst: vandaag, geschiedenis: [...(k.geschiedenis || []), ...erbij] }
-        : k));
+      zetKlussen(klussen.map((k) => (k.id === klusId ? { ...k, vinkjes: {}, laatst: vandaag, geschiedenis: [...(k.geschiedenis || []), ...erbij] } : k)));
       piep();
       return;
     }
@@ -1460,8 +201,42 @@ export default function Huishoudapp({ gebruiker }) {
     if (open) piep();
   };
 
+  const voegKlusToe = (v) => {
+    const nieuw = {
+      id: id(), titel: v.titel, wie: v.wie, ritme: v.ritme, punten: v.punten, tijd: v.tijd, dag: v.dag ?? null,
+      subs: v.subs || [], vinkjes: {}, status: ander ? "wacht" : "actief", door: ik.pid, laatst: null, geschiedenis: [],
+    };
+    zetKlussen([...klussen, nieuw]);
+    if (ander) {
+      const stappen = nieuw.subs.length ? ` · ${nieuw.subs.length} stappen` : "";
+      const bericht = nieuw.wie === ander.pid
+        ? { titel: `${ik.naam} stelt een klus voor`, tekst: `${nieuw.titel} · ${nieuw.punten} punten${stappen}. Accepteren of weigeren?` }
+        : nieuw.wie === "samen" || nieuw.wie === "beiden"
+          ? { titel: nieuw.wie === "beiden" ? "Nieuwe klus voor samen" : "Nieuwe klus voor wie eerst", tekst: `${nieuw.titel} · ${nieuw.punten} punten${stappen}. Ga je akkoord?` }
+          : { titel: "Punten goedkeuren", tekst: `${ik.naam} wil ${nieuw.punten} punten voor: ${nieuw.titel}` };
+      meld(ander.pid, bericht.titel, bericht.tekst);
+    }
+  };
+  const bewaarKlus = (v, nieuw) => {
+    if (nieuw) return voegKlusToe(v);
+    zetKlussen(klussen.map((k) => {
+      if (k.id !== v.id) return k;
+      const velden = { titel: v.titel, wie: v.wie, ritme: v.ritme, dag: v.dag ?? null, tijd: v.tijd, punten: v.punten, subs: v.subs };
+      return { ...k, ...velden, vinkjes: v.wie !== k.wie ? {} : k.vinkjes };
+    }));
+  };
+  const verwijderKlus = (k) => zetKlussen(klussen.filter((x) => x.id !== k.id));
+
+  const voegBoodschapToe = (tekst, ookVast) => {
+    const zelfde = (a) => a.trim().toLowerCase() === tekst.trim().toLowerCase();
+    if (!boodschappen.some((b) => !b.af && zelfde(b.tekst))) zetBoodschappen([...boodschappen, { id: id(), tekst, cat: "anders", af: false, door: ik.pid }]);
+    if (ookVast && !vast.some((v) => zelfde(v.tekst))) zetVast([...vast, { id: id(), tekst, cat: "anders", door: ik.pid }]);
+  };
+  const voegWensToe = (w) => zetWensen([...wensen, { id: id(), ...w, akkoord: [ik.pid], gekocht: false }]);
+
+  /* ---------- onboarding ---------- */
   const kies = async (pid) => {
-    await wijzigHuisgenoten((lijst) => lijst.map((p) => p.pid === pid ? { ...p, gebruiker: gebruiker.id } : p));
+    await wijzigHuisgenoten((lijst) => lijst.map((p) => (p.pid === pid ? { ...p, gebruiker: gebruiker.id } : p)));
     zetIkId(pid);
     zetPriveS((await laad("prive", false)) || []);
   };
@@ -1473,13 +248,9 @@ export default function Huishoudapp({ gebruiker }) {
       const bestaand = lijst.find((p) => p.naam.trim().toLowerCase() === naam.trim().toLowerCase());
       if (bestaand) {
         mijnPid = bestaand.pid;
-        return lijst.map((p) => p.pid === bestaand.pid
-          ? { ...p, gebruiker: gebruiker.id, foto: foto || p.foto } : p);
+        return lijst.map((p) => (p.pid === bestaand.pid ? { ...p, gebruiker: gebruiker.id, foto: foto || p.foto } : p));
       }
-      if (lijst.length >= 2) {
-        alert("Dit huishouden heeft al twee bewoners. Kies hierboven wie jij bent.");
-        return null;
-      }
+      if (lijst.length >= 2) { alert("Dit huishouden heeft al twee bewoners. Kies hierboven wie jij bent."); return null; }
       const verse = { pid: id(), naam: naam.trim(), foto, gebruiker: gebruiker.id };
       mijnPid = verse.pid;
       return [...lijst, verse];
@@ -1487,158 +258,88 @@ export default function Huishoudapp({ gebruiker }) {
     if (uitkomst && mijnPid) { zetIkId(mijnPid); zetNaam(""); }
   };
 
-  const stijl = `
-    @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap');
-    .weegbalk { transition: transform .6s cubic-bezier(.34,1.4,.64,1); }
-    button:focus-visible { outline: 2px solid ${GEEL}; outline-offset: 2px; }
-    input:focus { border-color: ${INK} !important; }
-    @media (prefers-reduced-motion: reduce) { .weegbalk { transition: none; } }
-  `;
-
   if (laden) {
-    return <div className="flex h-screen items-center justify-center" style={{ background: PAPIER, color: ZACHT, fontFamily: BODY }}>Even laden…</div>;
+    return <Midden><p className="display" style={{ textAlign: "center", fontSize: 22, fontWeight: 700, color: "var(--zacht)" }}>Ons huis</p></Midden>;
   }
 
   if (laadFout) {
     return (
-      <div className="flex min-h-screen flex-col justify-center p-6" style={{ background: PAPIER, fontFamily: BODY }}>
-        <h1 className="text-3xl" style={{ fontFamily: DISPLAY, fontWeight: 800, color: INK }}>Even niet gelukt</h1>
-        <p className="mt-2 text-sm" style={{ color: ZACHT }}>
-          De gegevens konden niet worden opgehaald, dus toont de app niets. Er is niets kwijt.
-        </p>
-        <p className="mt-2 text-xs" style={{ color: ZACHT, fontFamily: MONO }}>{laadFout}</p>
-        <div className="mt-4 flex gap-2">
-          <Knop onClick={() => { zetLaden(true); haalOp(); }}>Opnieuw proberen</Knop>
-          <Knop onClick={afmelden} vol={false} kleur={ZACHT}>Afmelden</Knop>
+      <Midden>
+        <h1 className="display" style={{ margin: 0, fontSize: 32, fontWeight: 800 }}>Even niet gelukt</h1>
+        <p style={{ margin: "8px 0 0", fontSize: 16, lineHeight: 1.5, color: "var(--zacht)" }}>De gegevens konden niet worden opgehaald, dus toont de app niets. Er is niets kwijt.</p>
+        <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--zacht)" }}>{laadFout}</p>
+        <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+          <Knop onClick={() => { zetLaden(true); haalOp(); }} style={{ flex: 1 }}>Opnieuw proberen</Knop>
+          <Knop soort="tint" onClick={afmelden}>Afmelden</Knop>
         </div>
-      </div>
+      </Midden>
     );
   }
 
-  /* onboarding */
   if (!ik) {
+    const vrij = personen.filter((p) => !p.gebruiker);
     return (
-      <div className="flex min-h-screen flex-col justify-center p-6" style={{ background: PAPIER, fontFamily: BODY }}>
-        <style>{stijl}</style>
-        <h1 className="text-4xl leading-tight" style={{ fontFamily: DISPLAY, fontWeight: 800, color: INK }}>Ons huis</h1>
-        <p className="mt-2 mb-6 text-sm" style={{ color: ZACHT }}>
-          Boodschappen, klussen, punten en wensen op één plek. De gedeelde lijsten zijn zichtbaar voor iedereen met deze app.
-        </p>
-        {personen.length > 0 && (
-          <div className="mb-4 space-y-2">
-            {personen.filter((p) => !p.gebruiker).map((p, i) => (
-              <button key={p.pid} onClick={() => kies(p.pid)} className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold"
-                style={{ background: KLEUREN[i], color: "#fff" }}>
-                <Avatar persoon={p} kleur={KLEUREN[i]} maat={28} />
-                Ik ben {p.naam}
+      <Midden>
+        <h1 className="display" style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em" }}>Ons huis</h1>
+        <p style={{ margin: "8px 0 24px", fontSize: 16, lineHeight: 1.5, color: "var(--zacht)" }}>Klussen, boodschappen, punten en wensen op één plek.</p>
+        {vrij.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+            {vrij.map((p) => (
+              <button key={p.pid} type="button" onClick={() => kies(p.pid)} className="kaart druk"
+                style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 64, padding: "0 16px", textAlign: "left", fontSize: 17, fontWeight: 600 }}>
+                <Avatar persoon={p} personen={personen} maat={40} rand={2.5} />Ik ben {p.naam}
               </button>
             ))}
           </div>
         )}
         {personen.length < 2 && (
-          <Kaart>
-            <p className="mb-2 text-xs uppercase tracking-widest" style={{ fontFamily: MONO, color: ZACHT }}>
-              {personen.length === 0 ? "wie zet dit op?" : "of voeg jezelf toe"}
-            </p>
-            <div className="flex items-center gap-3">
-              <FotoKnop opFoto={zetFoto} style={{ borderRadius: "50%" }}>
+          <div className="kaart" style={{ padding: 16 }}>
+            <p className="label" style={{ marginBottom: 12 }}>{personen.length === 0 ? "Wie zet dit op?" : "Of voeg jezelf toe"}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <FotoKnop opFoto={zetFoto} label="Foto maken">
                 {foto
-                  ? <img src={foto} alt="Jouw foto" style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover" }} />
-                  : <span className="flex items-center justify-center" style={{ width: 48, height: 48, borderRadius: "50%", background: PAPIER, border: `1px dashed ${LIJN}`, color: ZACHT }}>
-                      <Camera size={18} />
-                    </span>}
+                  ? <img src={foto} alt="Jouw foto" style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover" }} />
+                  : <span style={{ width: 52, height: 52, borderRadius: "50%", background: "var(--linnen)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--zacht)" }}><Camera size={20} /></span>}
               </FotoKnop>
-              <Invoer waarde={naam} zet={zetNaam} plaats="Je naam" opEnter={maakPersoon} />
-              <button onClick={maakPersoon} className="shrink-0 rounded-xl px-4" style={{ background: INK, color: "#fff" }}>Start</button>
+              <Veld waarde={naam} zet={zetNaam} plaats="Je naam" opEnter={maakPersoon} style={{ flex: 1 }} />
             </div>
-            <p className="mt-2 text-xs" style={{ color: ZACHT }}>Tik op de cirkel om een foto te maken. Die verschijnt bij jouw klussen.</p>
-          </Kaart>
+            <Knop onClick={maakPersoon} disabled={!naam.trim()} style={{ width: "100%", marginTop: 12 }}>Start</Knop>
+          </div>
         )}
-      </div>
+      </Midden>
     );
   }
 
-  const nu = new Date();
-  const titels = { vandaag: `Hoi ${ik.naam}`, boodschappen: "Boodschappen", klussen: "Klussen", wensen: "Wensen" };
-  const tabs = [
-    { k: "vandaag", l: "Vandaag", I: Home },
-    { k: "boodschappen", l: "Lijst", I: ShoppingBasket },
-    { k: "klussen", l: "Klussen", I: Sparkles },
-    { k: "wensen", l: "Wensen", I: Heart },
-  ];
+  const stipLijsten = klussen.some((k) => k.status === "wacht" && k.door !== ikId);
+  const gemeenschappelijk = { ik, personen, klussen, zetKlussen, vinkAf, meld, pop, toonPop, openKlus: (k) => zetKlusSheet({ klus: k }) };
 
   return (
-    <div className="relative flex flex-col" style={{ height: "100dvh", background: PAPIER, fontFamily: BODY, color: INK }}>
-      <style>{stijl}</style>
-
-      <header className="flex items-end justify-between px-5 pb-4" style={{ paddingTop: "calc(24px + env(safe-area-inset-top))" }}>
-        <div className="flex items-end gap-3">
-          <FotoKnop opFoto={bewaarFoto} style={{ borderRadius: "50%" }}>
-            <Avatar persoon={ik} kleur={KLEUREN[personen.findIndex((p) => p.pid === ikId)] || INK} maat={40} rand={LIJN} />
-          </FotoKnop>
-          <div>
-          <p className="text-xs uppercase tracking-widest" style={{ fontFamily: MONO, color: ZACHT }}>
-            {DAGEN[(nu.getDay() + 6) % 7]} {nu.getDate()} {MAANDEN[nu.getMonth()]}
-          </p>
-          <h1 className="text-3xl leading-tight" style={{ fontFamily: DISPLAY, fontWeight: 800 }}>{titels[tab]}</h1>
-          </div>
+    <div style={{ height: "100dvh", display: "flex", flexDirection: "column", background: "var(--bg)" }}>
+      <main ref={scroller} className="scroll" style={{ flex: 1, paddingBottom: `calc(${BALK_ONDER} + 100px)` }}>
+        <div style={{ maxWidth: 560, margin: "0 auto" }}>
+          {tab === "thuis" && (
+            <Thuis {...gemeenschappelijk} boodschappen={boodschappen} wensen={wensen} deals={deals} rondes={rondes}
+              prive={prive} zetPrive={zetPrive} gaNaar={zetTab} meldingen={meldingen} meldingenAan={meldingenAan} openProfiel={() => zetProfiel(true)} />
+          )}
+          {tab === "lijsten" && (
+            <Lijsten {...gemeenschappelijk} seg={seg} zetSeg={zetSeg} boodschappen={boodschappen} zetBoodschappen={zetBoodschappen}
+              vast={vast} zetVast={zetVast} wensen={wensen} zetWensen={zetWensen} deals={deals} />
+          )}
+          {tab === "stand" && <Stand ik={ik} personen={personen} klussen={klussen} rondes={rondes} zetRondes={zetRondes} meld={meld} openInzet={zetInzetMaand} />}
+          {tab === "chat" && <Chat chat={chat} zetChat={zetChat} ik={ik} personen={personen} meld={meld} />}
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={async () => zetMeldingen(await meldingenAanzetten(ik.pid))}
-            className="rounded-full p-2"
-            style={{ background: meldingen === "aan" ? GEEL : KAART, border: `1px solid ${LIJN}`, color: meldingen === "aan" ? INK : ZACHT }}
-            aria-label="Meldingen">
-            {meldingen === "aan" ? <Bell size={16} /> : <BellOff size={16} />}
-          </button>
-          <button onClick={haalOp} className="rounded-full p-2" style={{ background: KAART, border: `1px solid ${LIJN}`, color: ZACHT }} aria-label="Ververs">
-            <RefreshCw size={16} />
-          </button>
-          <button onClick={afmelden} className="rounded-full p-2" style={{ background: KAART, border: `1px solid ${LIJN}`, color: ZACHT }} aria-label="Afmelden">
-            <LogOut size={16} />
-          </button>
-        </div>
-      </header>
-
-      <main className="flex-1 overflow-y-auto px-5 pb-6">
-        {tab === "vandaag" && (
-          <Vandaag ik={ik} personen={personen} klussen={klussen} vinkAf={vinkAf} boodschappen={boodschappen}
-            wensen={wensen} prive={prive} zetPrive={zetPrive} gaNaar={zetTab}
-            rondes={rondes} zetRondes={zetRondes} />
-        )}
-        {tab === "boodschappen" && <Boodschappen lijst={boodschappen} zetLijst={zetBoodschappen} vast={vast} zetVast={zetVast} ik={ik} personen={personen} />}
-        {tab === "klussen" && <Klussen klussen={klussen} zetKlussen={zetKlussen} personen={personen} ik={ik} vinkAf={vinkAf} meld={meld} zetHuisgenoten={zetHuisgenoten} />}
-        {tab === "wensen" && <Wensen wensen={wensen} zetWensen={zetWensen} ik={ik} personen={personen} deals={deals} />}
       </main>
 
-      {!chatOpen && (
-        <button onClick={() => zetChatOpen(true)}
-          className="absolute right-5 flex h-14 w-14 items-center justify-center rounded-full"
-          style={{ bottom: "calc(88px + env(safe-area-inset-bottom))", background: INK, color: "#fff", boxShadow: "0 6px 20px rgba(22,36,31,.25)" }}
-          aria-label="Chat openen">
-          <MessageCircle size={22} />
-        </button>
-      )}
+      <Tabbalk tab={tab} kies={(t) => zetTab(t)} plus={() => zetSnel(true)} badgeChat={tab === "chat" ? 0 : ongelezen(chat, ik)} stipLijsten={stipLijsten} />
 
-      {chatOpen && (
-        <Chat chat={chat} zetChat={zetChat} ik={ik} personen={personen} meld={meld} sluit={() => zetChatOpen(false)} />
-      )}
-
-      <nav className="flex shrink-0 justify-around px-2 pt-2"
-        style={{ background: KAART, borderTop: `1px solid ${LIJN}`, paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
-        {tabs.map(({ k, l, I }) => (
-          <button key={k} onClick={() => zetTab(k)} className="flex flex-col items-center gap-1 px-3 py-1"
-            style={{ color: tab === k ? INK : ZACHT }}>
-            <span className="relative">
-              <I size={20} strokeWidth={tab === k ? 2.4 : 1.7} />
-              {k === "klussen" && klussen.some((x) => x.status === "wacht" && x.door !== ikId) && (
-                <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full" style={{ background: SAMEN }} />
-              )}
-            </span>
-            <span className="text-xs" style={{ fontFamily: MONO, fontWeight: tab === k ? 700 : 400 }}>{l}</span>
-          </button>
-        ))}
-      </nav>
+      <SnelToevoegen open={snel} sluit={() => zetSnel(false)} ik={ik} personen={personen}
+        soortStart={tab === "lijsten" ? { klussen: "klus", boodschappen: "boodschap", wensen: "wens" }[seg] : "klus"}
+        voegKlusToe={voegKlusToe} voegBoodschapToe={voegBoodschapToe} voegWensToe={voegWensToe}
+        meerOpties={(sjabloon) => { zetSnel(false); zetKlusSheet({ klus: sjabloon }); }} />
+      <KlusSheet open={!!klusSheet} sluit={() => zetKlusSheet(null)} klus={klusSheet?.klus} ik={ik} personen={personen} opslaan={bewaarKlus} verwijder={verwijderKlus} />
+      <InzetSheet open={!!inzetMaand} sluit={() => zetInzetMaand(null)} mk={inzetMaand} ik={ik} personen={personen} rondes={rondes} zetRondes={zetRondes} meld={meld} />
+      <ProfielSheet open={profiel} sluit={() => zetProfiel(false)} ik={ik} personen={personen} bewaarFoto={bewaarFoto}
+        meldingen={meldingen} meldingenAan={meldingenAan} ververs={haalOp} afmelden={afmelden} />
     </div>
   );
 }
