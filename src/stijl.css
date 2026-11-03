@@ -1,7 +1,130 @@
+@import "@fontsource-variable/bricolage-grotesque/opsz.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ---------- ontwerptokens: licht ---------- */
+:root {
+  --bg: #F4EFE7;
+  --kaart: #FFFDFA;
+  --linnen: #ECE4D8;
+  --naad: #E2D8C9;
+  --ink: #2B2420;
+  --zacht: #6B5E55;
+  --ring: #938575;
+  --honing: #E3A535;
+  --honing-tekst: #8A5A0C;
+  --honing-tint: #F6E3BC;
+  --p0: #2B7364;
+  --p0-tint: #D9E8E3;
+  --p1: #AE4269;
+  --p1-tint: #F3DCE4;
+  --terra: #963A1E;
+  --terra-tint: #F8E6DF;
+  --op-kleur: #FFFFFF;
+  --knop: #2B2420;
+  --knop-tekst: #FFFDFA;
+  --balk: rgba(255, 253, 250, 0.86);
+  --schaduw: 0 1px 2px rgba(43, 36, 32, 0.06), 0 10px 28px rgba(43, 36, 32, 0.05);
+  --schaduw-balk: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 8px 30px rgba(43, 36, 32, 0.16);
+  --kaartrand: transparent;
+  --dim: rgba(43, 36, 32, 0.42);
+
+  --display: "Bricolage Grotesque Variable", "Bricolage Grotesque", -apple-system, sans-serif;
+  --tekst: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  color-scheme: light;
+}
+
+/* ---------- ontwerptokens: donker, volgt de iPhone ---------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #191513;
+    --kaart: #24201D;
+    --linnen: #2E2925;
+    --naad: #3A332E;
+    --ink: #F4EDE4;
+    --zacht: #ADA196;
+    --ring: #837669;
+    --honing: #F0B54E;
+    --honing-tekst: #F0B54E;
+    --honing-tint: #3D3120;
+    --p0: #5BB5A1;
+    --p0-tint: #1F3A34;
+    --p1: #E58AAB;
+    --p1-tint: #40232F;
+    --terra: #E2805F;
+    --terra-tint: #3A2620;
+    --op-kleur: #191513;
+    --knop: #F4EDE4;
+    --knop-tekst: #191513;
+    --balk: rgba(36, 32, 29, 0.86);
+    --schaduw: none;
+    --schaduw-balk: 0 8px 30px rgba(0, 0, 0, 0.45);
+    --kaartrand: #3A332E;
+    --dim: rgba(0, 0, 0, 0.55);
+    color-scheme: dark;
+  }
+}
+
+/* ---------- iOS basis ---------- */
 html, body, #root { height: 100%; margin: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--tekst);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
 #root { height: 100dvh; }
-body { -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+button, a, label, input, textarea, select { touch-action: manipulation; }
+button { -webkit-user-select: none; user-select: none; cursor: pointer; font: inherit; color: inherit; }
+button:disabled { cursor: default; }
+/* Minimaal 16px voorkomt dat Safari inzoomt bij tikken in een veld. */
+input, textarea, select { font-size: 17px; font-family: var(--tekst); color: var(--ink); }
+input::placeholder, textarea::placeholder { color: var(--zacht); opacity: 1; }
+:focus-visible { outline: 2px solid var(--honing); outline-offset: 2px; }
+.scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.geen-balk { scrollbar-width: none; }
+.geen-balk::-webkit-scrollbar { display: none; }
+.display { font-family: var(--display); }
+.cijfers { font-variant-numeric: tabular-nums; }
+.label {
+  margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--zacht);
+}
+.kaart {
+  background: var(--kaart); border-radius: 22px; box-shadow: var(--schaduw);
+  border: 1px solid var(--kaartrand);
+}
+.alleen-lezer {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+.druk { transition: transform 0.12s ease; }
+.druk:active { transform: scale(0.96); }
+
+/* ---------- vieren ---------- */
+@keyframes plop { 0% { transform: scale(.6) } 45% { transform: scale(1.18) } 70% { transform: scale(.94) } 100% { transform: scale(1) } }
+@keyframes teken { to { stroke-dashoffset: 0 } }
+@keyframes stijg {
+  0% { opacity: 0; transform: translateY(6px) scale(.7) }
+  25% { opacity: 1; transform: translateY(-10px) scale(1.15) }
+  100% { opacity: 0; transform: translateY(-38px) scale(1) }
+}
+@keyframes omhoog { from { transform: translateY(100%) } to { transform: translateY(0) } }
+@keyframes vervaag { from { opacity: 0 } to { opacity: 1 } }
+.plop { animation: plop .42s cubic-bezier(.3, 1.4, .5, 1) both; }
+.vink path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: teken .32s .12s ease-out forwards; }
+.stijg { animation: stijg .9s ease-out forwards; pointer-events: none; }
+.sheet { animation: omhoog .32s cubic-bezier(.2, .9, .3, 1); }
+.dimmer { animation: vervaag .2s ease; }
+.balkgroei { transition: width .6s cubic-bezier(.2, .8, .2, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .plop, .vink path, .stijg, .sheet, .dimmer { animation: none; }
+  .vink path { stroke-dashoffset: 0; }
+  .balkgroei, .druk { transition: none; }
+}
