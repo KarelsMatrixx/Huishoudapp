@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { CircleCheck, ShoppingBasket, Heart, Bell, BellRing, RefreshCw, LogOut, Camera, Repeat } from "lucide-react";
-import { Sheet, Knop, Chip, Veld, Avatar, FotoKnop, Label } from "../ui";
+import { CircleCheck, ShoppingBasket, Heart, Bell, BellRing, RefreshCw, LogOut, Camera, Repeat, Search } from "lucide-react";
+import { Sheet, Knop, Chip, Veld, Avatar, FotoKnop, Label, Notities, Schakelaar } from "../ui";
 import { RITMES, PUNTOPTIES, MAANDEN } from "../logica";
 
 /* ---------- snel toevoegen vanaf de plusknop ---------- */
@@ -14,9 +14,11 @@ export function SnelToevoegen({ open, sluit, soortStart, ik, personen, voegKlusT
   const [ookVast, zetOokVast] = useState(false);
   const [ruimte, zetRuimte] = useState("");
   const [prijs, zetPrijs] = useState("");
+  const [notities, zetNotities] = useState("");
+  const [marktplaats, zetMarktplaats] = useState(false);
 
   useEffect(() => {
-    if (open) { zetSoort(soortStart || "klus"); zetTekst(""); zetWie(ik.pid); zetRitme("weekvrij"); zetPunten(2); zetOokVast(false); zetRuimte(""); zetPrijs(""); }
+    if (open) { zetSoort(soortStart || "klus"); zetTekst(""); zetWie(ik.pid); zetRitme("weekvrij"); zetPunten(2); zetOokVast(false); zetRuimte(""); zetPrijs(""); zetNotities(""); zetMarktplaats(false); }
   }, [open, soortStart, ik.pid]);
 
   const wieOpties = [{ v: ik.pid, l: "Jij" }, ...(ander ? [{ v: ander.pid, l: ander.naam }] : []), { v: "samen", l: "Wie eerst" }, { v: "beiden", l: "Samen" }];
@@ -24,7 +26,7 @@ export function SnelToevoegen({ open, sluit, soortStart, ik, personen, voegKlusT
     if (!tekst.trim()) return;
     if (soort === "klus") voegKlusToe({ titel: tekst.trim(), wie, ritme, punten, tijd: "19:00", dag: ritme === "week" ? 6 : ritme === "maand" ? 1 : null, subs: [] });
     if (soort === "boodschap") voegBoodschapToe(tekst.trim(), ookVast);
-    if (soort === "wens") voegWensToe({ tekst: tekst.trim(), ruimte: ruimte.trim(), prijs: Number(String(prijs).replace(",", ".")) || 0 });
+    if (soort === "wens") voegWensToe({ tekst: tekst.trim(), ruimte: ruimte.trim(), prijs: Number(String(prijs).replace(",", ".")) || 0, notities: notities.trim(), marktplaats });
     sluit();
   };
 
@@ -101,6 +103,19 @@ export function SnelToevoegen({ open, sluit, soortStart, ik, personen, voegKlusT
           <Veld waarde={ruimte} zet={zetRuimte} plaats="Ruimte" style={{ flex: 1 }} />
           <Veld waarde={prijs} zet={zetPrijs} plaats="Richtprijs €" inputMode="decimal" style={{ width: 150 }} />
         </div>
+      )}
+
+      {soort === "wens" && (
+        <>
+          <Notities label="Wat moet het zijn?" waarde={notities} zet={zetNotities}
+            plaats="Bijvoorbeeld: 2-persoons, hout of metaal, geen hoekbank, liefst donkere kleur" />
+          <Schakelaar aan={marktplaats} zet={zetMarktplaats} icoon={<Search size={20} color={marktplaats ? "var(--honing-tekst)" : "var(--zacht)"} />}>
+            Dagelijks zoeken op Marktplaats
+          </Schakelaar>
+          {marktplaats && !(Number(String(prijs).replace(",", ".")) > 0) && (
+            <p style={{ margin: 0, fontSize: 13, color: "var(--terra)" }}>Vul een richtprijs in, anders kan de bot geen deal herkennen.</p>
+          )}
+        </>
       )}
 
       {soort === "klus" && ander && (
