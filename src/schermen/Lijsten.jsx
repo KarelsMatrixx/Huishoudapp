@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Repeat, X, Plus, Star, ExternalLink, Heart, Check, ChevronDown, Pencil } from "lucide-react";
-import { Kop, Kaart, Label, Segment, Chip, Leeg, Avatar, Knop, Pil, kleurVan } from "../ui";
+import { Repeat, X, Plus, Star, ExternalLink, Heart, Check, ChevronDown, Pencil, Search } from "lucide-react";
+import { Kop, Kaart, Label, Segment, Chip, Leeg, Avatar, Knop, Pil, kleurVan, Notities, Schakelaar } from "../ui";
 import KlusRegel from "./KlusRegel";
 import { staatOpen, groepVan, vervaldatumVan, maandagVan, vanSleutel, isVoorMij, PUNTOPTIES, ritmeTekst, id, euro } from "../logica";
 
@@ -308,6 +308,7 @@ function Wensen({ wensen, zetWensen, ik, personen, deals }) {
 
   const stem = (w) => zetWensen(wensen.map((x) => x.id === w.id
     ? { ...x, akkoord: (x.akkoord || []).includes(ik.pid) ? x.akkoord.filter((a) => a !== ik.pid) : [...(x.akkoord || []), ik.pid] } : x));
+  const pas = (w, wijziging) => zetWensen(wensen.map((x) => (x.id === w.id ? { ...x, ...wijziging } : x)));
   const gekocht = (w) => zetWensen(wensen.map((x) => (x.id === w.id ? { ...x, gekocht: true } : x)));
   const weg = (w) => { if (confirm(`"${w.tekst}" van de wensenlijst halen?`)) zetWensen(wensen.filter((x) => x.id !== w.id)); };
 
@@ -358,7 +359,11 @@ function Wensen({ wensen, zetWensen, ik, personen, deals }) {
                   <button type="button" onClick={() => zetUit(uit === w.id ? null : w.id)} aria-expanded={uit === w.id}
                     style={{ flex: 1, minWidth: 0, border: 0, background: "transparent", padding: "8px 0", textAlign: "left" }}>
                     <span style={{ display: "block", fontSize: 17, fontWeight: 600, overflowWrap: "anywhere" }}>{w.tekst}</span>
-                    <span style={{ display: "block", marginTop: 2, fontSize: 13, color: "var(--zacht)" }}>{w.ruimte || "Hele huis"}{w.prijs ? ` · ${euro(w.prijs)}` : ""}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2, fontSize: 13, color: "var(--zacht)" }}>
+                      {w.marktplaats && <Search size={13} color="var(--honing-tekst)" aria-label="Zoekt op Marktplaats" />}
+                      {w.ruimte || "Hele huis"}{w.prijs ? ` · ${euro(w.prijs)}` : ""}
+                    </span>
+                    {w.notities && <span style={{ display: "block", marginTop: 2, fontSize: 13, color: "var(--zacht)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.notities}</span>}
                   </button>
                   {dealVoor(w) && <Pil samen style={{ fontSize: 12, padding: "2px 8px" }}>deal</Pil>}
                   <span style={{ display: "flex" }} aria-label={`Akkoord: ${personen.filter((x) => (w.akkoord || []).includes(x.pid)).map((x) => x.naam).join(" en ") || "nog niemand"}`}>
@@ -373,9 +378,20 @@ function Wensen({ wensen, zetWensen, ik, personen, deals }) {
                   </button>
                 </div>
                 {uit === w.id && (
-                  <div style={{ display: "flex", gap: 8, padding: "0 16px 12px" }}>
-                    <Knop soort="tint" onClick={() => gekocht(w)} style={{ flex: 1, height: 44, fontSize: 15 }}>Gekocht</Knop>
-                    <Knop soort="gevaar" onClick={() => weg(w)} style={{ height: 44, fontSize: 15 }}>Verwijderen</Knop>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 12px" }}>
+                    <Notities label="Wat moet het zijn?" waarde={w.notities} opKlaar={(t) => pas(w, { notities: t })}
+                      plaats="Bijvoorbeeld: 2-persoons, hout of metaal, geen hoekbank" />
+                    <Schakelaar aan={!!w.marktplaats} zet={(aan) => pas(w, { marktplaats: aan })}
+                      icoon={<Search size={20} color={w.marktplaats ? "var(--honing-tekst)" : "var(--zacht)"} />}>
+                      Dagelijks zoeken op Marktplaats
+                    </Schakelaar>
+                    {w.marktplaats && !(Number(w.prijs) > 0) && (
+                      <p style={{ margin: 0, fontSize: 13, color: "var(--terra)" }}>Zonder richtprijs slaat de bot deze wens over.</p>
+                    )}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <Knop soort="tint" onClick={() => gekocht(w)} style={{ flex: 1, height: 44, fontSize: 15 }}>Gekocht</Knop>
+                      <Knop soort="gevaar" onClick={() => weg(w)} style={{ height: 44, fontSize: 15 }}>Verwijderen</Knop>
+                    </div>
                   </div>
                 )}
               </div>
