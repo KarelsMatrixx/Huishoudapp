@@ -409,13 +409,16 @@ function WensGegevens({ w, pas }) {
   const [tekst, zetTekst] = useState(w.tekst || "");
   const [ruimte, zetRuimte] = useState(w.ruimte || "");
   const [prijs, zetPrijs] = useState(w.prijs ? String(w.prijs) : "");
-  useEffect(() => { zetTekst(w.tekst || ""); zetRuimte(w.ruimte || ""); zetPrijs(w.prijs ? String(w.prijs) : ""); }, [w.tekst, w.ruimte, w.prijs]);
+  const [zoek, zetZoek] = useState(w.zoek || "");
+  useEffect(() => { zetTekst(w.tekst || ""); zetRuimte(w.ruimte || ""); zetPrijs(w.prijs ? String(w.prijs) : ""); zetZoek(w.zoek || ""); }, [w.tekst, w.ruimte, w.prijs, w.zoek]);
 
   const bewaarTekst = () => {
     const t = tekst.trim();
     if (!t) { zetTekst(w.tekst || ""); return; }
     if (t !== w.tekst) pas(w, { tekst: t });
   };
+  // Nieuwe zoekterm: het oude "moet"-filter hoort bij de oude zoekterm en zou nieuwe resultaten blokkeren, dus dat vervalt.
+  const bewaarZoek = () => { const z = zoek.trim(); if (z !== (w.zoek || "")) pas(w, { zoek: z, moet: "" }); };
   const bewaarRuimte = () => { if (ruimte.trim() !== (w.ruimte || "")) pas(w, { ruimte: ruimte.trim() }); };
   const bewaarPrijs = () => {
     const n = Number(String(prijs).replace(",", ".")) || 0;
@@ -429,8 +432,12 @@ function WensGegevens({ w, pas }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <label style={vak}>
-        <span style={kop}>Titel (hierop zoekt de bot)</span>
+        <span style={kop}>Titel</span>
         <input value={tekst} onChange={(e) => zetTekst(e.target.value)} onBlur={bewaarTekst} onKeyDown={enter} enterKeyHint="done" style={veld} />
+      </label>
+      <label style={vak}>
+        <span style={kop}>Zoekterm op Marktplaats</span>
+        <input value={zoek} onChange={(e) => zetZoek(e.target.value)} onBlur={bewaarZoek} onKeyDown={enter} enterKeyHint="search" placeholder={tekst || "Zoekterm"} style={veld} />
       </label>
       <div style={{ display: "flex", gap: 8 }}>
         <label style={{ ...vak, flex: 1 }}>
@@ -442,7 +449,6 @@ function WensGegevens({ w, pas }) {
           <input value={prijs} onChange={(e) => zetPrijs(e.target.value)} onBlur={bewaarPrijs} onKeyDown={enter} enterKeyHint="done" inputMode="decimal" placeholder="0" style={veld} />
         </label>
       </div>
-      {w.zoek && <p style={{ margin: 0, fontSize: 13, color: "var(--zacht)" }}>De bot zoekt nu op "{w.zoek}" in plaats van de titel.</p>}
     </div>
   );
 }
