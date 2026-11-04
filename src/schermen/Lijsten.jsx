@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Repeat, X, Plus, Star, ExternalLink, Heart, Check, ChevronDown, Pencil, Search } from "lucide-react";
 import { Kop, Kaart, Label, Segment, Chip, Leeg, Avatar, Knop, Pil, kleurVan, Notities, Schakelaar } from "../ui";
 import KlusRegel from "./KlusRegel";
@@ -379,6 +379,7 @@ function Wensen({ wensen, zetWensen, ik, personen, deals }) {
                 </div>
                 {uit === w.id && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 12px" }}>
+                    <WensGegevens w={w} pas={pas} />
                     <Notities label="Wat moet het zijn?" waarde={w.notities} opKlaar={(t) => pas(w, { notities: t })}
                       plaats="Bijvoorbeeld: 2-persoons, hout of metaal, geen hoekbank" />
                     <Schakelaar aan={!!w.marktplaats} zet={(aan) => pas(w, { marktplaats: aan })}
@@ -399,6 +400,49 @@ function Wensen({ wensen, zetWensen, ik, personen, deals }) {
           })}
         </Kaart>
       )}
+    </div>
+  );
+}
+
+/* Titel, ruimte en richtprijs van een wens aanpassen. Bewaart bij het verlaten van een veld. */
+function WensGegevens({ w, pas }) {
+  const [tekst, zetTekst] = useState(w.tekst || "");
+  const [ruimte, zetRuimte] = useState(w.ruimte || "");
+  const [prijs, zetPrijs] = useState(w.prijs ? String(w.prijs) : "");
+  useEffect(() => { zetTekst(w.tekst || ""); zetRuimte(w.ruimte || ""); zetPrijs(w.prijs ? String(w.prijs) : ""); }, [w.tekst, w.ruimte, w.prijs]);
+
+  const bewaarTekst = () => {
+    const t = tekst.trim();
+    if (!t) { zetTekst(w.tekst || ""); return; }
+    if (t !== w.tekst) pas(w, { tekst: t });
+  };
+  const bewaarRuimte = () => { if (ruimte.trim() !== (w.ruimte || "")) pas(w, { ruimte: ruimte.trim() }); };
+  const bewaarPrijs = () => {
+    const n = Number(String(prijs).replace(",", ".")) || 0;
+    if (n !== (Number(w.prijs) || 0)) pas(w, { prijs: n });
+  };
+  const veld = { width: "100%", border: 0, background: "transparent", outline: "none", padding: 0, fontSize: 16, fontFamily: "inherit", color: "var(--ink)" };
+  const vak = { display: "flex", flexDirection: "column", gap: 4, padding: "10px 16px", borderRadius: 16, background: "var(--linnen)", minWidth: 0 };
+  const kop = { fontSize: 13, fontWeight: 600, color: "var(--zacht)" };
+  const enter = (e) => { if (e.key === "Enter") e.currentTarget.blur(); };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <label style={vak}>
+        <span style={kop}>Titel (hierop zoekt de bot)</span>
+        <input value={tekst} onChange={(e) => zetTekst(e.target.value)} onBlur={bewaarTekst} onKeyDown={enter} enterKeyHint="done" style={veld} />
+      </label>
+      <div style={{ display: "flex", gap: 8 }}>
+        <label style={{ ...vak, flex: 1 }}>
+          <span style={kop}>Ruimte</span>
+          <input value={ruimte} onChange={(e) => zetRuimte(e.target.value)} onBlur={bewaarRuimte} onKeyDown={enter} enterKeyHint="done" placeholder="Hele huis" style={veld} />
+        </label>
+        <label style={{ ...vak, width: 140, flex: "none" }}>
+          <span style={kop}>Richtprijs €</span>
+          <input value={prijs} onChange={(e) => zetPrijs(e.target.value)} onBlur={bewaarPrijs} onKeyDown={enter} enterKeyHint="done" inputMode="decimal" placeholder="0" style={veld} />
+        </label>
+      </div>
+      {w.zoek && <p style={{ margin: 0, fontSize: 13, color: "var(--zacht)" }}>De bot zoekt nu op "{w.zoek}" in plaats van de titel.</p>}
     </div>
   );
 }
