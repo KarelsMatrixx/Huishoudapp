@@ -186,6 +186,35 @@ export function Veld({ label, waarde, zet, plaats, opEnter, type = "text", style
   );
 }
 
+/* Meerregelig tekstveld voor notities. Bewaart pas bij verlaten (opKlaar) of bij elke wijziging (zet). */
+export function Notities({ label, waarde, zet, opKlaar, plaats, rijen = 3 }) {
+  const [tekst, zetTekst] = useState(waarde || "");
+  useEffect(() => { zetTekst(waarde || ""); }, [waarde]);
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4, padding: "10px 16px", borderRadius: 16, background: "var(--linnen)" }}>
+      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--zacht)" }}>{label}</span>
+      <textarea value={tekst} placeholder={plaats} rows={rijen}
+        onChange={(e) => { zetTekst(e.target.value); if (zet) zet(e.target.value); }}
+        onBlur={() => { if (opKlaar && tekst.trim() !== (waarde || "").trim()) opKlaar(tekst.trim()); }}
+        style={{ width: "100%", border: 0, background: "transparent", outline: "none", resize: "vertical", padding: 0, fontSize: 16, lineHeight: 1.4, fontFamily: "inherit", color: "var(--ink)" }} />
+    </label>
+  );
+}
+
+/* Aan/uit schakelaar met tekst ervoor. */
+export function Schakelaar({ aan, zet, children, icoon }) {
+  return (
+    <button type="button" role="switch" aria-checked={aan} onClick={() => zet(!aan)}
+      style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 48, width: "100%", border: 0, background: "transparent", padding: 0, textAlign: "left", color: "var(--ink)" }}>
+      {icoon}
+      <span style={{ flex: 1, fontSize: 16 }}>{children}</span>
+      <span style={{ width: 50, height: 30, flex: "none", borderRadius: 15, background: aan ? "var(--p0)" : "var(--linnen)", position: "relative", transition: "background .2s" }}>
+        <span style={{ position: "absolute", top: 3, left: aan ? 23 : 3, width: 24, height: 24, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.2)", transition: "left .2s" }} />
+      </span>
+    </button>
+  );
+}
+
 /* Paneel dat van onderen opkomt. */
 export function Sheet({ open, sluit, titel, children, voet, label }) {
   const paneel = useRef(null);

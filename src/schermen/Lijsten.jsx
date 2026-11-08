@@ -1,6 +1,6 @@
-import React, { useState } from "react";
-import { Repeat, X, Plus, Star, ExternalLink, Heart, Check, ChevronDown, Pencil, Undo2 } from "lucide-react";
-import { Kop, Kaart, Label, Segment, Chip, Leeg, Avatar, Knop, Pil, kleurVan } from "../ui";
+import React, { useEffect, useState } from "react";
+import { Repeat, X, Plus, Star, ExternalLink, Heart, Check, ChevronDown, Pencil, Search, Undo2 } from "lucide-react";
+import { Kop, Kaart, Label, Segment, Chip, Leeg, Avatar, Knop, Pil, kleurVan, Notities, Schakelaar } from "../ui";
 import KlusRegel from "./KlusRegel";
 import { staatOpen, groepVan, vervaldatumVan, maandagVan, vanSleutel, isVoorMij, PUNTOPTIES, ritmeTekst, id, euro, oordeelVan } from "../logica";
 
@@ -311,6 +311,7 @@ function Wensen({ wensen, zetWensen, ik, personen, deals, oordeel, geefOordeel }
 
   const stem = (w) => zetWensen(wensen.map((x) => x.id === w.id
     ? { ...x, akkoord: (x.akkoord || []).includes(ik.pid) ? x.akkoord.filter((a) => a !== ik.pid) : [...(x.akkoord || []), ik.pid] } : x));
+  const pas = (w, wijziging) => zetWensen(wensen.map((x) => (x.id === w.id ? { ...x, ...wijziging } : x)));
   const gekocht = (w) => zetWensen(wensen.map((x) => (x.id === w.id ? { ...x, gekocht: true } : x)));
   const weg = (w) => { if (confirm(`"${w.tekst}" van de wensenlijst halen?`)) zetWensen(wensen.filter((x) => x.id !== w.id)); };
 
@@ -396,7 +397,11 @@ function Wensen({ wensen, zetWensen, ik, personen, deals, oordeel, geefOordeel }
                   <button type="button" onClick={() => zetUit(uit === w.id ? null : w.id)} aria-expanded={uit === w.id}
                     style={{ flex: 1, minWidth: 0, border: 0, background: "transparent", padding: "8px 0", textAlign: "left" }}>
                     <span style={{ display: "block", fontSize: 17, fontWeight: 600, overflowWrap: "anywhere" }}>{w.tekst}</span>
-                    <span style={{ display: "block", marginTop: 2, fontSize: 13, color: "var(--zacht)" }}>{w.ruimte || "Hele huis"}{w.prijs ? ` · ${euro(w.prijs)}` : ""}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2, fontSize: 13, color: "var(--zacht)" }}>
+                      {w.marktplaats && <Search size={13} color="var(--honing-tekst)" aria-label="Zoekt op Marktplaats" />}
+                      {w.ruimte || "Hele huis"}{w.prijs ? ` · ${euro(w.prijs)}` : ""}
+                    </span>
+                    {w.notities && <span style={{ display: "block", marginTop: 2, fontSize: 13, color: "var(--zacht)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.notities}</span>}
                   </button>
                   {dealVoor(w) && <Pil samen style={{ fontSize: 12, padding: "2px 8px" }}>deal</Pil>}
                   <span style={{ display: "flex" }} aria-label={`Akkoord: ${personen.filter((x) => (w.akkoord || []).includes(x.pid)).map((x) => x.naam).join(" en ") || "nog niemand"}`}>
@@ -411,9 +416,21 @@ function Wensen({ wensen, zetWensen, ik, personen, deals, oordeel, geefOordeel }
                   </button>
                 </div>
                 {uit === w.id && (
-                  <div style={{ display: "flex", gap: 8, padding: "0 16px 12px" }}>
-                    <Knop soort="tint" onClick={() => gekocht(w)} style={{ flex: 1, height: 44, fontSize: 15 }}>Gekocht</Knop>
-                    <Knop soort="gevaar" onClick={() => weg(w)} style={{ height: 44, fontSize: 15 }}>Verwijderen</Knop>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 12px" }}>
+                    <WensGegevens w={w} pas={pas} />
+                    <Notities label="Wat moet het zijn?" waarde={w.notities} opKlaar={(t) => pas(w, { notities: t })}
+                      plaats="Bijvoorbeeld: 2-persoons, hout of metaal, geen hoekbank" />
+                    <Schakelaar aan={!!w.marktplaats} zet={(aan) => pas(w, { marktplaats: aan })}
+                      icoon={<Search size={20} color={w.marktplaats ? "var(--honing-tekst)" : "var(--zacht)"} />}>
+                      Dagelijks zoeken op Marktplaats
+                    </Schakelaar>
+                    {w.marktplaats && !(Number(w.prijs) > 0) && (
+                      <p style={{ margin: 0, fontSize: 13, color: "var(--terra)" }}>Zonder richtprijs slaat de bot deze wens over.</p>
+                    )}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <Knop soort="tint" onClick={() => gekocht(w)} style={{ flex: 1, height: 44, fontSize: 15 }}>Gekocht</Knop>
+                      <Knop soort="gevaar" onClick={() => weg(w)} style={{ height: 44, fontSize: 15 }}>Verwijderen</Knop>
+                    </div>
                   </div>
                 )}
               </div>
@@ -421,6 +438,55 @@ function Wensen({ wensen, zetWensen, ik, personen, deals, oordeel, geefOordeel }
           })}
         </Kaart>
       )}
+    </div>
+  );
+}
+
+/* Titel, ruimte en richtprijs van een wens aanpassen. Bewaart bij het verlaten van een veld. */
+function WensGegevens({ w, pas }) {
+  const [tekst, zetTekst] = useState(w.tekst || "");
+  const [ruimte, zetRuimte] = useState(w.ruimte || "");
+  const [prijs, zetPrijs] = useState(w.prijs ? String(w.prijs) : "");
+  const [zoek, zetZoek] = useState(w.zoek || "");
+  useEffect(() => { zetTekst(w.tekst || ""); zetRuimte(w.ruimte || ""); zetPrijs(w.prijs ? String(w.prijs) : ""); zetZoek(w.zoek || ""); }, [w.tekst, w.ruimte, w.prijs, w.zoek]);
+
+  const bewaarTekst = () => {
+    const t = tekst.trim();
+    if (!t) { zetTekst(w.tekst || ""); return; }
+    if (t !== w.tekst) pas(w, { tekst: t });
+  };
+  // Nieuwe zoekterm: het oude "moet"-filter hoort bij de oude zoekterm en zou nieuwe resultaten blokkeren, dus dat vervalt.
+  const bewaarZoek = () => { const z = zoek.trim(); if (z !== (w.zoek || "")) pas(w, { zoek: z, moet: "" }); };
+  const bewaarRuimte = () => { if (ruimte.trim() !== (w.ruimte || "")) pas(w, { ruimte: ruimte.trim() }); };
+  const bewaarPrijs = () => {
+    const n = Number(String(prijs).replace(",", ".")) || 0;
+    if (n !== (Number(w.prijs) || 0)) pas(w, { prijs: n });
+  };
+  const veld = { width: "100%", border: 0, background: "transparent", outline: "none", padding: 0, fontSize: 16, fontFamily: "inherit", color: "var(--ink)" };
+  const vak = { display: "flex", flexDirection: "column", gap: 4, padding: "10px 16px", borderRadius: 16, background: "var(--linnen)", minWidth: 0 };
+  const kop = { fontSize: 13, fontWeight: 600, color: "var(--zacht)" };
+  const enter = (e) => { if (e.key === "Enter") e.currentTarget.blur(); };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <label style={vak}>
+        <span style={kop}>Titel</span>
+        <input value={tekst} onChange={(e) => zetTekst(e.target.value)} onBlur={bewaarTekst} onKeyDown={enter} enterKeyHint="done" style={veld} />
+      </label>
+      <label style={vak}>
+        <span style={kop}>Zoekterm op Marktplaats</span>
+        <input value={zoek} onChange={(e) => zetZoek(e.target.value)} onBlur={bewaarZoek} onKeyDown={enter} enterKeyHint="search" placeholder={tekst || "Zoekterm"} style={veld} />
+      </label>
+      <div style={{ display: "flex", gap: 8 }}>
+        <label style={{ ...vak, flex: 1 }}>
+          <span style={kop}>Ruimte</span>
+          <input value={ruimte} onChange={(e) => zetRuimte(e.target.value)} onBlur={bewaarRuimte} onKeyDown={enter} enterKeyHint="done" placeholder="Hele huis" style={veld} />
+        </label>
+        <label style={{ ...vak, width: 140, flex: "none" }}>
+          <span style={kop}>Richtprijs €</span>
+          <input value={prijs} onChange={(e) => zetPrijs(e.target.value)} onBlur={bewaarPrijs} onKeyDown={enter} enterKeyHint="done" inputMode="decimal" placeholder="0" style={veld} />
+        </label>
+      </div>
     </div>
   );
 }
