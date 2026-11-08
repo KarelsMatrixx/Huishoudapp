@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Home, ListChecks, Plus, Trophy, MessageCircle, Camera } from "lucide-react";
 import { laad, bewaar, luister, meldingenAanzetten, meldingStand, afmelden } from "./opslag";
-import { id, sleutelVan, staatOpen, piep, lokaal } from "./logica";
+import { id, sleutelVan, staatOpen, piep, lokaal, oordeelGeldt } from "./logica";
 import { Knop, Avatar, FotoKnop, Veld, useOpstijg } from "./ui";
 import Thuis from "./schermen/Thuis";
 import Lijsten, { BALK_ONDER } from "./schermen/Lijsten";
@@ -63,6 +63,7 @@ export default function Huishoudapp({ gebruiker }) {
   const [rondes, zetRondesS] = useState({});
   const [uitgaand, zetUitgaandS] = useState([]);
   const [deals, zetDeals] = useState(null);
+  const [oordeel, zetOordeelS] = useState({});
   const [chat, zetChatS] = useState([]);
   const [vast, zetVastS] = useState([]);
   const [tab, zetTabS] = useState(() => lokaal("tab") || "thuis");
@@ -83,10 +84,10 @@ export default function Huishoudapp({ gebruiker }) {
 
   const haalOp = useCallback(async () => {
     try {
-      const [hg, bo, kl, we, pr, ro, ui, ch, va, dl] = await Promise.all([
+      const [hg, bo, kl, we, pr, ro, ui, ch, va, dl, oo] = await Promise.all([
         laad("huisgenoten", true), laad("boodschappen", true), laad("klussen", true), laad("wensen", true),
         laad("prive", false), laad("maandrondes", true), laad("uitgaand", true), laad("chat", true),
-        laad("vastelijst", true), laad("deals", true),
+        laad("vastelijst", true), laad("deals", true), laad("deals_oordeel", true),
       ]);
       zetPersonen(hg || []);
       zetIkId((hg || []).find((p) => p.gebruiker === gebruiker.id)?.pid || null);
@@ -99,6 +100,7 @@ export default function Huishoudapp({ gebruiker }) {
       zetChatS(ch || []);
       zetVastS(va || []);
       zetDeals(dl || null);
+      zetOordeelS(oo && typeof oo === "object" && !Array.isArray(oo) ? oo : {});
       laatsteSync.current = Date.now();
       zetGeladen(true);
       zetLaadFout(null);
@@ -130,6 +132,31 @@ export default function Huishoudapp({ gebruiker }) {
   const zetChat = maak("chat", zetChatS, true);
   const zetVast = maak("vastelijst", zetVastS, true);
   const zetHuisgenoten = maak("huisgenoten", zetPersonen, true);
+
+  /* ---------- oordeel over Marktplaats-vondsten ----------
+     "deals" wordt elke ochtend door de bot overschreven, daarom staat het oordeel in een eigen sleutel.
+     Eerst direct tonen, daarna vers lezen, aanpassen en opslaan zodat een oordeel van de ander niet verdwijnt. */
+  const geefOordeel = async (d, waarde) => {
+    if (!geladen) return;
+    const pasToe = (huidig) => {
+      const nu = Date.now();
+      const nieuw = {};
+      for (const [k, o] of Object.entries(huidig || {})) if (oordeelGeldt(o, nu)) nieuw[k] = o;
+      if (waarde) nieuw[d.id] = { oordeel: waarde, moment: nu, wensId: d.wensId, titel: d.titel, prijs: d.prijs };
+      else delete nieuw[d.id];
+      return nieuw;
+    };
+    zetOordeelS(pasToe(oordeel));
+    try {
+      const vers = await laad("deals_oordeel", true);
+      const nieuw = pasToe(vers && typeof vers === "object" && !Array.isArray(vers) ? vers : {});
+      await bewaar("deals_oordeel", nieuw, true);
+      zetOordeelS(nieuw);
+    } catch (e) {
+      console.warn("Oordeel opslaan mislukt:", e?.message || e);
+      haalOp();
+    }
+  };
 
   // Leest de huisgenoten vers uit de database, past ze aan en slaat ze op.
   const wijzigHuisgenoten = async (pasAan) => {
@@ -318,12 +345,12 @@ export default function Huishoudapp({ gebruiker }) {
       <main ref={scroller} className="scroll" style={{ flex: 1, paddingBottom: `calc(${BALK_ONDER} + 100px)` }}>
         <div style={{ maxWidth: 560, margin: "0 auto" }}>
           {tab === "thuis" && (
-            <Thuis {...gemeenschappelijk} boodschappen={boodschappen} wensen={wensen} deals={deals} rondes={rondes}
+            <Thuis {...gemeenschappelijk} boodschappen={boodschappen} wensen={wensen} deals={deals} oordeel={oordeel} rondes={rondes}
               prive={prive} zetPrive={zetPrive} gaNaar={zetTab} meldingen={meldingen} meldingenAan={meldingenAan} openProfiel={() => zetProfiel(true)} />
           )}
           {tab === "lijsten" && (
             <Lijsten {...gemeenschappelijk} seg={seg} zetSeg={zetSeg} boodschappen={boodschappen} zetBoodschappen={zetBoodschappen}
-              vast={vast} zetVast={zetVast} wensen={wensen} zetWensen={zetWensen} deals={deals} />
+              vast={vast} zetVast={zetVast} wensen={wensen} zetWensen={zetWensen} deals={deals} oordeel={oordeel} geefOordeel={geefOordeel} />
           )}
           {tab === "stand" && <Stand ik={ik} personen={personen} klussen={klussen} rondes={rondes} zetRondes={zetRondes} meld={meld} openInzet={zetInzetMaand} />}
           {tab === "chat" && <Chat chat={chat} zetChat={zetChat} ik={ik} personen={personen} meld={meld} />}

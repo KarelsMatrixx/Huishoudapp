@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Repeat, X, Plus, Star, ExternalLink, Heart, Check, ChevronDown, Pencil } from "lucide-react";
+import { Repeat, X, Plus, Star, ExternalLink, Heart, Check, ChevronDown, Pencil, Undo2 } from "lucide-react";
 import { Kop, Kaart, Label, Segment, Chip, Leeg, Avatar, Knop, Pil, kleurVan } from "../ui";
 import KlusRegel from "./KlusRegel";
-import { staatOpen, groepVan, vervaldatumVan, maandagVan, vanSleutel, isVoorMij, PUNTOPTIES, ritmeTekst, id, euro } from "../logica";
+import { staatOpen, groepVan, vervaldatumVan, maandagVan, vanSleutel, isVoorMij, PUNTOPTIES, ritmeTekst, id, euro, oordeelVan } from "../logica";
 
 export const BALK_ONDER = "max(12px, calc(env(safe-area-inset-bottom) - 6px))";
 
@@ -296,12 +296,15 @@ function Boodschappen({ boodschappen: lijst, zetBoodschappen: zetLijst, vast, ze
 }
 
 /* ---------- wensen ---------- */
-function Wensen({ wensen, zetWensen, ik, personen, deals }) {
+function Wensen({ wensen, zetWensen, ik, personen, deals, oordeel, geefOordeel }) {
   const [uit, zetUit] = useState(null);
+  const [toonAfgekeurd, zetToonAfgekeurd] = useState(false);
   const open = wensen.filter((w) => !w.gekocht);
   const totaal = open.reduce((s, w) => s + (Number(w.prijs) || 0), 0);
   const eens = open.filter((w) => (w.akkoord || []).length >= personen.length).length;
-  const items = (deals?.items || []).filter((d) => open.some((w) => w.id === d.wensId));
+  const alle = (deals?.items || []).filter((d) => open.some((w) => w.id === d.wensId));
+  const items = alle.filter((d) => oordeelVan(oordeel, d) !== "fout");
+  const afgekeurd = alle.filter((d) => oordeelVan(oordeel, d) === "fout");
   const st = deals?.status;
   const tijd = st?.moment ? new Date(st.moment).toLocaleString("nl-NL", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : null;
   const dealVoor = (w) => items.some((d) => d.wensId === w.id);
@@ -328,20 +331,55 @@ function Wensen({ wensen, zetWensen, ik, personen, deals }) {
               </p>
             </div>
           </div>
-          {items.slice(0, 6).map((d) => (
-            <a key={d.id} href={d.url} target="_blank" rel="noopener noreferrer"
-              style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10, padding: 8, borderRadius: 16, background: "var(--bg)", textDecoration: "none", color: "var(--ink)" }}>
-              {d.foto
-                ? <img src={d.foto.startsWith("//") ? "https:" + d.foto : d.foto} alt="" style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", flex: "none" }} />
-                : <span style={{ width: 56, height: 56, borderRadius: 12, background: "var(--linnen)", flex: "none" }} />}
-              <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ fontSize: 15, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.titel}</span>
-                <span style={{ fontSize: 13, color: "var(--zacht)" }}><strong style={{ color: "var(--ink)" }}>€{d.prijs}</strong> <s>€{d.richtprijs}</s> · {d.plaats}{d.afstandKm != null ? ` ${d.afstandKm} km` : ""}</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--honing-tekst)" }}>voor: {d.wens}</span>
-              </span>
-              <ExternalLink size={18} color="var(--zacht)" aria-hidden="true" />
-            </a>
-          ))}
+          {items.slice(0, 6).map((d) => {
+            const goed = oordeelVan(oordeel, d) === "goed";
+            return (
+              <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 10, padding: "8px 4px 8px 8px", borderRadius: 16, background: "var(--bg)" }}>
+                <a href={d.url} target="_blank" rel="noopener noreferrer"
+                  style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 12, textDecoration: "none", color: "var(--ink)" }}>
+                  {d.foto
+                    ? <img src={d.foto.startsWith("//") ? "https:" + d.foto : d.foto} alt="" style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", flex: "none" }} />
+                    : <span style={{ width: 56, height: 56, borderRadius: 12, background: "var(--linnen)", flex: "none" }} />}
+                  <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ fontSize: 15, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.titel}</span>
+                    <span style={{ fontSize: 13, color: "var(--zacht)" }}><strong style={{ color: "var(--ink)" }}>€{d.prijs}</strong> <s>€{d.richtprijs}</s> · {d.plaats}{d.afstandKm != null ? ` ${d.afstandKm} km` : ""}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--honing-tekst)" }}>voor: {d.wens}</span>
+                  </span>
+                  <ExternalLink size={16} color="var(--zacht)" aria-hidden="true" />
+                </a>
+                <button type="button" onClick={() => geefOordeel(d, goed ? null : "goed")} aria-pressed={goed}
+                  aria-label={(goed ? "Goedkeuring weghalen: " : "Goedkeuren: ") + d.titel}
+                  style={{ width: 44, height: 44, flex: "none", border: 0, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: goed ? "var(--p0)" : "transparent", color: goed ? "var(--op-kleur)" : "var(--zacht)" }}>
+                  <Check size={22} strokeWidth={goed ? 3 : 2.2} />
+                </button>
+                <button type="button" onClick={() => geefOordeel(d, "fout")} aria-label={"Afkeuren: " + d.titel}
+                  style={{ width: 44, height: 44, flex: "none", border: 0, borderRadius: 14, background: "transparent", color: "var(--zacht)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <X size={22} strokeWidth={2.2} />
+                </button>
+              </div>
+            );
+          })}
+          {afgekeurd.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <button type="button" onClick={() => zetToonAfgekeurd(!toonAfgekeurd)} aria-expanded={toonAfgekeurd}
+                style={{ minHeight: 44, width: "100%", border: 0, background: "transparent", padding: 0, fontSize: 13, fontWeight: 600, color: "var(--zacht)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                Afgekeurd ({afgekeurd.length}) {toonAfgekeurd ? "verbergen" : "tonen"}
+                <ChevronDown size={14} style={{ transform: toonAfgekeurd ? "rotate(180deg)" : "none" }} />
+              </button>
+              {toonAfgekeurd && afgekeurd.map((d) => (
+                <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 4px 6px 12px", borderRadius: 14, background: "var(--bg)", marginTop: 6 }}>
+                  <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: "var(--zacht)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.titel}</span>
+                    <span style={{ fontSize: 12, color: "var(--zacht)" }}>€{d.prijs} · voor: {d.wens}</span>
+                  </span>
+                  <Knop soort="tint" onClick={() => geefOordeel(d, null)} style={{ height: 40, fontSize: 14, padding: "0 12px", flex: "none", display: "flex", alignItems: "center", gap: 6 }}>
+                    <Undo2 size={16} /> Terugzetten
+                  </Knop>
+                </div>
+              ))}
+            </div>
+          )}
         </Kaart>
       )}
 
