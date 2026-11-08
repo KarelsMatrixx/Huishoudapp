@@ -123,3 +123,12 @@ export function lokaal(sleutel, waarde) {
 }
 
 export const euro = (n) => "€" + Math.round(Number(n) || 0).toLocaleString("nl-NL");
+
+/* ---------- oordeel over Marktplaats-vondsten (huis_data, sleutel "deals_oordeel") ---------- */
+export const OORDEEL_DAGEN = 30;
+// Een oordeel geldt 30 dagen. Daarna telt het niet meer en wordt het bij het opslaan opgeruimd.
+export const oordeelGeldt = (o, nu = Date.now()) => !!o && Number(o.moment) > 0 && nu - Number(o.moment) < OORDEEL_DAGEN * 864e5;
+export const oordeelVan = (oordeel, d) => {
+  const o = oordeel?.[d.id];
+  return oordeelGeldt(o) ? o.oordeel : null; // "goed", "fout" of null
+};

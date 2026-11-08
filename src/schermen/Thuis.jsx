@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Bell, BellRing, ChevronRight, ShoppingBasket, Heart, Trophy, Plus, Lock } from "lucide-react";
 import { Kop, Kaart, Label, Avatar, RondeKnop, Leeg } from "../ui";
 import KlusRegel from "./KlusRegel";
-import { DAGEN, MAANDEN, maandSleutel, puntenVan, staatOpen, groepVan, isVoorMij, sleutelVan, id, euro } from "../logica";
+import { DAGEN, MAANDEN, maandSleutel, puntenVan, staatOpen, groepVan, isVoorMij, sleutelVan, id, euro, oordeelVan } from "../logica";
 
 export function Scorebord({ personen, klussen, ik, compact }) {
   const nu = new Date();
@@ -44,7 +44,7 @@ export function standTekst(personen, klussen, ik) {
   return mijn > zijn ? `Je staat ${v} ${p} voor. Ga zo door.` : `Je staat ${v} ${p} achter. Tijd voor een klus.`;
 }
 
-export default function Thuis({ ik, personen, klussen, zetKlussen, vinkAf, boodschappen, wensen, deals, rondes, prive, zetPrive, gaNaar, meldingen, meldingenAan, openProfiel, openKlus, pop, toonPop }) {
+export default function Thuis({ ik, personen, klussen, zetKlussen, vinkAf, boodschappen, wensen, deals, oordeel, rondes, prive, zetPrive, gaNaar, meldingen, meldingenAan, openProfiel, openKlus, pop, toonPop }) {
   const nu = new Date();
   const vandaag = sleutelVan(nu);
   const [uit, zetUit] = useState(null);
@@ -67,7 +67,7 @@ export default function Thuis({ ik, personen, klussen, zetKlussen, vinkAf, boods
 
   const teKopen = boodschappen.filter((b) => !b.af).length;
   const openWensen = wensen.filter((w) => !w.gekocht);
-  const aantalDeals = (deals?.items || []).filter((d) => openWensen.some((w) => w.id === d.wensId)).length;
+  const aantalDeals = (deals?.items || []).filter((d) => openWensen.some((w) => w.id === d.wensId) && oordeelVan(oordeel, d) !== "fout").length;
 
   const voegNotitieToe = () => {
     if (!notitie.trim()) return;
